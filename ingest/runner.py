@@ -13,11 +13,19 @@ from evidence_mapper.mapper import map_to_evidence
 OUTPUT_DIR = Path(__file__).parent.parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
+# 시스템 네임스페이스 필터링 (확장 가능)
+SYSTEM_NAMESPACES = {
+    "kube-system",
+    "kube-flannel",
+    "kube-node-lease",
+    "kube-public",
+    "ingress-nginx",
+}
+
 
 def collect_tetragon_events(since: str = "2m") -> list:
     """모든 Tetragon Pod에서 로그 수집 (노드별로 각각 뽑음)"""
     try:
-        # 모든 Tetragon Pod 이름 가져오기
         pods_result = subprocess.run(
             [
                 "kubectl", "get", "pods",
@@ -100,6 +108,9 @@ def run():
         event = tetragon_normalize(raw)
         if not event:
             continue
+        # 시스템 네임스페이스 제외
+        if event.actor.namespace in SYSTEM_NAMESPACES:
+            continue
         evidence = map_to_evidence(event)
         if not evidence:
             continue
@@ -108,6 +119,9 @@ def run():
     for raw in audit_events:
         event = audit_normalize(raw)
         if not event:
+            continue
+        # 시스템 네임스페이스 제외
+        if event.actor.namespace in SYSTEM_NAMESPACES:
             continue
         evidence = map_to_evidence(event)
         if not evidence:
