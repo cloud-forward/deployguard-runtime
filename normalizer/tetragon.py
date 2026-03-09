@@ -1,10 +1,7 @@
 import uuid
 from datetime import datetime
 from schemas.normalized_event import NormalizedEvent, EventSource, EventCategory, WorkloadContext
-
-SA_TOKEN_PATHS = ["/var/run/secrets/kubernetes.io/serviceaccount"]
-SENSITIVE_PATHS = ["/proc/1", "/etc/shadow", "/etc/kubernetes", "/var/lib/kubelet"]
-SUSPICIOUS_BINARIES = ["/curl", "/nmap", "/nsenter", "/bash", "/sh", "/wget", "/python", "/nc"]
+from config.loader import get_tetragon_rules
 
 
 def _parse_timestamp(ts: str) -> datetime:
@@ -14,23 +11,29 @@ def _parse_timestamp(ts: str) -> datetime:
     )
 
 
-def _get_process_info(process: dict) -> tuple:
+def _get_process_info(process: dict, raw: dict) -> tuple:
     pod = process.get("pod", {})
+    sa_name = pod.get("serviceAccountName", None)
     return pod, WorkloadContext(
         namespace=pod.get("namespace"),
         pod_name=pod.get("name"),
         container_name=pod.get("container", {}).get("name"),
-        node_name=process.get("node_name"),
+        node_name=raw.get("node_name"),
+        service_account=sa_name,
     )
 
 
 def normalize(raw: dict) -> NormalizedEvent | None:
+    rules = get_tetragon_rules()
+    sa_token_paths = rules.get("sa_token_paths", [])
+    sensitive_paths = rules.get("sensitive_paths", [])
+    suspicious_binaries = rules.get("suspicious_binaries", [])
 
     # process_kprobe (파일/네트워크 접근)
     kprobe = raw.get("process_kprobe")
     if kprobe:
         process = kprobe.get("process", {})
-        _, actor = _get_process_info(process)
+        _, actor = _get_process_info(process, raw)
         func = kprobe.get("function_name", "")
         args = kprobe.get("args", [])
         timestamp = raw.get("time", datetime.utcnow().isoformat())
@@ -64,24 +67,22 @@ def normalize(raw: dict) -> NormalizedEvent | None:
     exec_event = raw.get("process_exec")
     if exec_event:
         process = exec_event.get("process", {})
-        _, actor = _get_process_info(process)
+        _, actor = _get_process_info(process, raw)
         timestamp = raw.get("time", datetime.utcnow().isoformat())
         binary = process.get("binary", "")
         arguments = process.get("arguments", "")
 
-        # arguments에서 파일 접근 패턴 감지
-        if any(p in arguments for p in SA_TOKEN_PATHS):
+        if any(p in arguments for p in sa_token_paths):
             category = EventCategory.FILE
             action = "open"
             target = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 
-        elif any(p in arguments for p in SENSITIVE_PATHS):
+        elif any(p in arguments for p in sensitive_paths):
             category = EventCategory.FILE
             action = "open"
             target = arguments
 
-        # binary에서 의심 프로세스 감지
-        elif any(binary.endswith(b) for b in SUSPICIOUS_BINARIES):
+        elif any(binary.endswith(b) for b in suspicious_binaries):
             category = EventCategory.PROCESS
             action = "exec"
             target = binary

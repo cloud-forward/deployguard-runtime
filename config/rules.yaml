@@ -1,0 +1,28 @@
+# config/rules.yaml
+
+tetragon:
+  sa_token_paths:
+    - "/var/run/secrets/kubernetes.io/serviceaccount"
+
+  sensitive_paths:
+    - "/proc/1"
+    - "/etc/shadow"
+    - "/etc/kubernetes"
+    - "/var/lib/kubelet"
+
+  suspicious_binaries:
+    - "/curl"
+    - "/nmap"
+    - "/nsenter"
+    - "/bash"
+    - "/sh"
+    - "/wget"
+    - "/python"
+    - "/nc"
+
+system_namespaces:
+  - "kube-system"
+  - "kube-flannel"
+  - "kube-node-lease"
+  - "kube-public"
+  - "ingress-nginx"

@@ -9,18 +9,10 @@ sys.path.append(str(Path(__file__).parent.parent))
 from normalizer.tetragon import normalize as tetragon_normalize
 from normalizer.audit import normalize as audit_normalize
 from evidence_mapper.mapper import map_to_evidence
+from config.loader import get_system_namespaces
 
 OUTPUT_DIR = Path(__file__).parent.parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
-
-# 시스템 네임스페이스 필터링 (확장 가능)
-SYSTEM_NAMESPACES = {
-    "kube-system",
-    "kube-flannel",
-    "kube-node-lease",
-    "kube-public",
-    "ingress-nginx",
-}
 
 
 def collect_tetragon_events(since: str = "2m") -> list:
@@ -93,6 +85,7 @@ def collect_audit_events(log_path: str = "/var/log/kubernetes/audit/audit.log") 
 
 def run():
     print(f"[{datetime.now()}] 스캐너 시작")
+    system_namespaces = get_system_namespaces()
 
     # 1. 수집
     tetragon_events = collect_tetragon_events(since="2m")
@@ -108,8 +101,7 @@ def run():
         event = tetragon_normalize(raw)
         if not event:
             continue
-        # 시스템 네임스페이스 제외
-        if event.actor.namespace in SYSTEM_NAMESPACES:
+        if event.actor.namespace in system_namespaces:
             continue
         evidence = map_to_evidence(event)
         if not evidence:
@@ -120,8 +112,7 @@ def run():
         event = audit_normalize(raw)
         if not event:
             continue
-        # 시스템 네임스페이스 제외
-        if event.actor.namespace in SYSTEM_NAMESPACES:
+        if event.actor.namespace in system_namespaces:
             continue
         evidence = map_to_evidence(event)
         if not evidence:
