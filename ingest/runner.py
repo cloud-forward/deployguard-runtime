@@ -1,7 +1,6 @@
 import subprocess
 import json
 import sys
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,29 +14,48 @@ OUTPUT_DIR = Path(__file__).parent.parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 
-def collect_tetragon_events(since: str = "1m") -> list:
-    """Tetragon 로그에서 raw JSON 이벤트 수집"""
+def collect_tetragon_events(since: str = "2m") -> list:
+    """모든 Tetragon Pod에서 로그 수집 (노드별로 각각 뽑음)"""
     try:
-        result = subprocess.run(
+        # 모든 Tetragon Pod 이름 가져오기
+        pods_result = subprocess.run(
             [
-                "kubectl", "logs",
+                "kubectl", "get", "pods",
                 "-n", "kube-system",
                 "-l", "app.kubernetes.io/name=tetragon",
-                "-c", "export-stdout",
-                f"--since={since}",
+                "-o", "jsonpath={.items[*].metadata.name}",
             ],
             capture_output=True,
             text=True,
         )
+        pod_names = [
+            p for p in pods_result.stdout.strip().split()
+            if "operator" not in p
+        ]
+
         events = []
-        for line in result.stdout.strip().split("\n"):
-            if not line:
-                continue
-            try:
-                events.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
+        for pod_name in pod_names:
+            result = subprocess.run(
+                [
+                    "kubectl", "logs",
+                    "-n", "kube-system",
+                    pod_name,
+                    "-c", "export-stdout",
+                    f"--since={since}",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            for line in result.stdout.strip().split("\n"):
+                if not line:
+                    continue
+                try:
+                    events.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+
         return events
+
     except Exception as e:
         print(f"[ERROR] Tetragon 수집 실패: {e}")
         return []
