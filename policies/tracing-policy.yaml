@@ -1,9 +1,10 @@
 apiVersion: cilium.io/v1alpha1
 kind: TracingPolicy
 metadata:
-  name: detect-sa-token-access
+  name: deployguard-runtime-policy
 spec:
   kprobes:
+  # SA token 접근
   - call: "sys_openat"
     syscall: true
     args:
@@ -15,6 +16,15 @@ spec:
         operator: "Prefix"
         values:
         - "/var/run/secrets/kubernetes.io/serviceaccount"
+
+  # 민감 파일 접근
+  - call: "sys_openat"
+    syscall: true
+    args:
+    - index: 1
+      type: "string"
+    selectors:
+    - matchArgs:
       - index: 1
         operator: "Prefix"
         values:
@@ -22,3 +32,33 @@ spec:
         - "/etc/shadow"
         - "/etc/kubernetes"
         - "/var/lib/kubelet"
+
+  # IMDS + 외부 통신
+  - call: "tcp_connect"
+    syscall: false
+    args:
+    - index: 0
+      type: "sock"
+    selectors:
+    - matchArgs:
+      - index: 0
+        operator: "DAddr"
+        values:
+        - "169.254.169.254/32"
+
+  # 의심 프로세스
+  - call: "sys_execve"
+    syscall: true
+    args:
+    - index: 0
+      type: "string"
+    selectors:
+    - matchArgs:
+      - index: 0
+        operator: "Postfix"
+        values:
+        - "/curl"
+        - "/nmap"
+        - "/nsenter"
+        - "/bash"
+        - "/sh"
