@@ -1,0 +1,74 @@
+[
+  {
+    "process_kprobe": {
+      "process": {
+        "pid": 1234,
+        "binary": "/bin/sh",
+        "pod": {
+          "name": "api-pod-7d9f8b-xkj2p",
+          "namespace": "default",
+          "container": { "name": "api-container" }
+        },
+        "node_name": "ip-10-0-1-50.ec2.internal"
+      },
+      "function_name": "sys_openat",
+      "args": [{ "file_arg": { "path": "/var/run/secrets/kubernetes.io/serviceaccount/token" } }],
+      "return": { "int_arg": 3 },
+      "time": "2024-01-15T10:23:45.123456789Z"
+    }
+  },
+  {
+    "process_kprobe": {
+      "process": {
+        "pid": 1235,
+        "binary": "/bin/curl",
+        "pod": {
+          "name": "api-pod-7d9f8b-xkj2p",
+          "namespace": "default",
+          "container": { "name": "api-container" }
+        },
+        "node_name": "ip-10-0-1-50.ec2.internal"
+      },
+      "function_name": "tcp_connect",
+      "args": [{ "sock_arg": { "saddr": "10.0.1.50", "daddr": "10.96.0.1", "dport": 443, "protocol": "TCP" } }],
+      "return": { "int_arg": 0 },
+      "time": "2024-01-15T10:23:46.000000000Z"
+    }
+  },
+  {
+    "process_kprobe": {
+      "process": {
+        "pid": 1236,
+        "binary": "/usr/bin/curl",
+        "pod": {
+          "name": "api-pod-7d9f8b-xkj2p",
+          "namespace": "default",
+          "container": { "name": "api-container" }
+        },
+        "node_name": "ip-10-0-1-50.ec2.internal"
+      },
+      "function_name": "tcp_connect",
+      "args": [{ "sock_arg": { "saddr": "10.0.1.50", "daddr": "169.254.169.254", "dport": 80, "protocol": "TCP" } }],
+      "return": { "int_arg": 0 },
+      "time": "2024-01-15T10:24:10.000000000Z"
+    }
+  },
+  {
+    "process_kprobe": {
+      "process": {
+        "pid": 1237,
+        "binary": "/bin/cat",
+        "pod": {
+          "name": "api-pod-7d9f8b-xkj2p",
+          "namespace": "default",
+          "container": { "name": "api-container" }
+        },
+        "node_name": "ip-10-0-1-50.ec2.internal"
+      },
+      "function_name": "sys_openat",
+      "args": [{ "file_arg": { "path": "/proc/1/environ" } }],
+      "return": { "int_arg": 5 },
+      "time": "2024-01-15T10:24:30.000000000Z"
+    }
+  }
+]

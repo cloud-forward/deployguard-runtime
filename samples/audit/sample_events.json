@@ -1,0 +1,47 @@
+[
+  {
+    "kind": "Event",
+    "apiVersion": "audit.k8s.io/v1",
+    "verb": "get",
+    "user": { "username": "system:serviceaccount:default:api-sa" },
+    "objectRef": { "resource": "secrets", "namespace": "default", "name": "db-credentials", "apiVersion": "v1" },
+    "responseStatus": { "code": 200 },
+    "requestReceivedTimestamp": "2024-01-15T10:23:47.000000Z"
+  },
+  {
+    "kind": "Event",
+    "apiVersion": "audit.k8s.io/v1",
+    "verb": "list",
+    "user": { "username": "system:serviceaccount:default:api-sa" },
+    "objectRef": { "resource": "secrets", "namespace": "default", "apiVersion": "v1" },
+    "responseStatus": { "code": 200 },
+    "requestReceivedTimestamp": "2024-01-15T10:23:50.000000Z"
+  },
+  {
+    "kind": "Event",
+    "apiVersion": "audit.k8s.io/v1",
+    "verb": "create",
+    "user": { "username": "system:serviceaccount:default:api-sa" },
+    "objectRef": { "resource": "cronjobs", "namespace": "default", "name": "backdoor-cron", "apiVersion": "batch/v1" },
+    "responseStatus": { "code": 201 },
+    "requestReceivedTimestamp": "2024-01-15T10:25:00.000000Z"
+  },
+  {
+    "kind": "Event",
+    "apiVersion": "audit.k8s.io/v1",
+    "verb": "create",
+    "user": { "username": "system:serviceaccount:default:api-sa" },
+    "objectRef": { "resource": "daemonsets", "namespace": "default", "name": "node-collector", "apiVersion": "apps/v1" },
+    "responseStatus": { "code": 201 },
+    "requestReceivedTimestamp": "2024-01-15T10:25:30.000000Z"
+  },
+  {
+    "kind": "Event",
+    "apiVersion": "audit.k8s.io/v1",
+    "verb": "create",
+    "user": { "username": "system:serviceaccount:default:api-sa" },
+    "objectRef": { "resource": "pods", "subresource": "exec", "namespace": "default", "name": "target-pod", "apiVersion": "v1" },
+    "responseStatus": { "code": 101 },
+    "requestReceivedTimestamp": "2024-01-15T10:26:00.000000Z"
+  }
+]

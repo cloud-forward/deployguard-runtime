@@ -1,0 +1,79 @@
+# ── 1. Secret (Crown Jewel) ──────────────────────────────────────────
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  namespace: default
+type: Opaque
+stringData:
+  username: admin
+  password: super-secret-password
+  db-host: db.internal.example.com
+
+---
+# ── 2. ServiceAccount (과권한) ───────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vulnerable-sa
+  namespace: default
+automountServiceAccountToken: true
+
+---
+# ── 3. Role (secret read 권한) ───────────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: secret-reader
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+- apiGroups: ["batch"]
+  resources: ["cronjobs"]
+  verbs: ["create", "get", "list"]
+- apiGroups: ["apps"]
+  resources: ["daemonsets"]
+  verbs: ["create", "get", "list"]
+
+---
+# ── 4. RoleBinding ───────────────────────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vulnerable-sa-binding
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: vulnerable-sa
+  namespace: default
+roleRef:
+  kind: Role
+  name: secret-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ── 5. Pod (취약한 설정) ─────────────────────────────────────────────
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vulnerable-pod
+  namespace: default
+  labels:
+    app: vulnerable-app
+spec:
+  serviceAccountName: vulnerable-sa
+  automountServiceAccountToken: true
+  containers:
+  - name: app
+    image: ubuntu:22.04
+    command: ["sleep", "86400"]
+    volumeMounts:
+    - name: host-proc
+      mountPath: /host/proc
+      readOnly: true
+  volumes:
+  - name: host-proc
+    hostPath:
+      path: /proc

@@ -33,7 +33,10 @@ def normalize(raw: dict) -> NormalizedEvent | None:
 
     return NormalizedEvent(
         event_id=str(uuid.uuid4()),
-        timestamp=datetime.fromisoformat(timestamp.replace("Z", "+00:00")),
+        timestamp=datetime.fromisoformat(
+            timestamp.replace("Z", "+00:00")[:26] + "+00:00"
+            if "." in timestamp else timestamp.replace("Z", "+00:00")
+        ),
         source=EventSource.TETRAGON,
         category=category,
         actor=WorkloadContext(
