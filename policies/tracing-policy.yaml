@@ -5,27 +5,27 @@ metadata:
 spec:
   kprobes:
   # SA token 접근
-  - call: "sys_openat"
-    syscall: true
+  - call: "security_file_open"
+    syscall: false
     args:
-    - index: 1
-      type: "string"
+    - index: 0
+      type: "file"
     selectors:
     - matchArgs:
-      - index: 1
+      - index: 0
         operator: "Prefix"
         values:
         - "/var/run/secrets/kubernetes.io/serviceaccount"
 
   # 민감 파일 접근
-  - call: "sys_openat"
-    syscall: true
+  - call: "security_file_open"
+    syscall: false
     args:
-    - index: 1
-      type: "string"
+    - index: 0
+      type: "file"
     selectors:
     - matchArgs:
-      - index: 1
+      - index: 0
         operator: "Prefix"
         values:
         - "/proc/1"
@@ -33,7 +33,7 @@ spec:
         - "/etc/kubernetes"
         - "/var/lib/kubelet"
 
-  # IMDS + 외부 통신
+  # IMDS 접근
   - call: "tcp_connect"
     syscall: false
     args:
