@@ -2,6 +2,10 @@ import uuid
 from datetime import datetime
 from schemas.normalized_event import NormalizedEvent, EventSource, EventCategory, WorkloadContext
 
+SA_TOKEN_PATHS = ["/var/run/secrets/kubernetes.io/serviceaccount"]
+SENSITIVE_PATHS = ["/proc/1", "/etc/shadow", "/etc/kubernetes", "/var/lib/kubelet"]
+SUSPICIOUS_BINARIES = ["/curl", "/nmap", "/nsenter", "/bash", "/sh", "/wget", "/python", "/nc"]
+
 
 def _parse_timestamp(ts: str) -> datetime:
     return datetime.fromisoformat(
@@ -31,7 +35,7 @@ def normalize(raw: dict) -> NormalizedEvent | None:
         args = kprobe.get("args", [])
         timestamp = raw.get("time", datetime.utcnow().isoformat())
 
-        if func in ("sys_open", "sys_openat"):
+        if func in ("sys_open", "sys_openat", "security_file_open"):
             category = EventCategory.FILE
             action = "open"
             target = next((a["file_arg"]["path"] for a in args if "file_arg" in a), None)
@@ -65,14 +69,36 @@ def normalize(raw: dict) -> NormalizedEvent | None:
         binary = process.get("binary", "")
         arguments = process.get("arguments", "")
 
+        # arguments에서 파일 접근 패턴 감지
+        if any(p in arguments for p in SA_TOKEN_PATHS):
+            category = EventCategory.FILE
+            action = "open"
+            target = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+        elif any(p in arguments for p in SENSITIVE_PATHS):
+            category = EventCategory.FILE
+            action = "open"
+            target = arguments
+
+        # binary에서 의심 프로세스 감지
+        elif any(binary.endswith(b) for b in SUSPICIOUS_BINARIES):
+            category = EventCategory.PROCESS
+            action = "exec"
+            target = binary
+
+        else:
+            category = EventCategory.PROCESS
+            action = "exec"
+            target = binary
+
         return NormalizedEvent(
             event_id=str(uuid.uuid4()),
             timestamp=_parse_timestamp(timestamp),
             source=EventSource.TETRAGON,
-            category=EventCategory.PROCESS,
+            category=category,
             actor=actor,
-            action="exec",
-            target=binary,
+            action=action,
+            target=target,
             raw=raw,
         )
 
