@@ -1,5 +1,3 @@
-# config/loader.py
-
 from pathlib import Path
 import yaml
 
@@ -18,3 +16,6 @@ def get_tetragon_rules() -> dict:
 
 def get_system_namespaces() -> set:
     return set(load_config().get("system_namespaces", []))
+
+def get_system_users() -> set:
+    return set(load_config().get("system_users", []))

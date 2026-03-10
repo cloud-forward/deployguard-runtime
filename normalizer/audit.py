@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from schemas.normalized_event import NormalizedEvent, EventSource, EventCategory, WorkloadContext
+from config.loader import get_system_users
 
 
 def normalize(raw: dict) -> NormalizedEvent | None:
@@ -12,9 +13,13 @@ def normalize(raw: dict) -> NormalizedEvent | None:
     status = raw.get("responseStatus", {})
     timestamp = raw.get("requestReceivedTimestamp", datetime.utcnow().isoformat())
 
-    # service account 파싱
-    # "system:serviceaccount:default:api-sa" → "api-sa"
+    # 시스템 유저 필터링
     username = user.get("username", "")
+    system_users = get_system_users()
+    if any(username.startswith(u) for u in system_users):
+        return None
+
+    # service account 파싱
     sa = username.split(":")[-1] if "serviceaccount" in username else None
 
     return NormalizedEvent(

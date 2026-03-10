@@ -25,3 +25,10 @@ system_namespaces:
   - "kube-node-lease"
   - "kube-public"
   - "ingress-nginx"
+
+system_users:
+  - "system:kube-controller-manager"
+  - "system:kube-scheduler"
+  - "system:node"
+  - "system:apiserver"
+  - "system:kube-proxy"
