@@ -90,20 +90,19 @@ def get_pod_sa_map() -> dict:
             [
                 "kubectl", "get", "pods",
                 "--all-namespaces",
-                "-o", "jsonpath={range .items[*]}{.metadata.namespace}/{.metadata.name}={.spec.serviceAccountName}\\n{end}",
+                "-o", "json",
             ],
             capture_output=True,
             text=True,
         )
+        data = json.loads(result.stdout)
         mapping = {}
-        for line in result.stdout.strip().split("\n"):
-            if not line:
-                continue
-            try:
-                key, sa = line.split("=")
-                mapping[key] = sa
-            except Exception:
-                continue
+        for item in data.get("items", []):
+            ns = item["metadata"]["namespace"]
+            name = item["metadata"]["name"]
+            sa = item["spec"].get("serviceAccountName", "")
+            if sa:
+                mapping[f"{ns}/{name}"] = sa
         return mapping
     except Exception as e:
         print(f"[ERROR] Pod SA 매핑 실패: {e}")
