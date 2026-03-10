@@ -26,3 +26,6 @@ system_namespaces:
   - "kube-node-lease"
   - "kube-public"
   - "ingress-nginx"
+
+imds_addresses:
+    - "169.254.169.254"

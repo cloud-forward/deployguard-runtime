@@ -33,18 +33,12 @@ spec:
         - "/etc/kubernetes"
         - "/var/lib/kubelet"
 
-  # IMDS 접근
+  # IMDS 접근 (모든 tcp_connect 수집 후 코드에서 필터링)
   - call: "tcp_connect"
     syscall: false
     args:
     - index: 0
       type: "sock"
-    selectors:
-    - matchArgs:
-      - index: 0
-        operator: "DAddr"
-        values:
-        - "169.254.169.254"
 
   # 의심 프로세스
   - call: "__x64_sys_execve"
