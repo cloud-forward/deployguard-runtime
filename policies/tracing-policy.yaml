@@ -4,7 +4,7 @@ metadata:
   name: deployguard-runtime-policy
 spec:
   kprobes:
-  # SA token 접근
+  # 파일 접근 (SA token + 민감 파일 통합)
   - call: "__x64_sys_openat"
     syscall: true
     args:
@@ -16,24 +16,12 @@ spec:
         operator: "Prefix"
         values:
         - "/var/run/secrets/kubernetes.io/serviceaccount"
-
-  # 민감 파일 접근
-  - call: "__x64_sys_openat"
-    syscall: true
-    args:
-    - index: 1
-      type: "string"
-    selectors:
-    - matchArgs:
-      - index: 1
-        operator: "Prefix"
-        values:
         - "/proc/1"
         - "/etc/shadow"
         - "/etc/kubernetes"
         - "/var/lib/kubelet"
 
-  # IMDS 접근 (모든 tcp_connect 수집 후 코드에서 필터링)
+  # IMDS 접근
   - call: "tcp_connect"
     syscall: false
     args:
