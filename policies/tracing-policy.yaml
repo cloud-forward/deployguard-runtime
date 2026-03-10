@@ -5,27 +5,27 @@ metadata:
 spec:
   kprobes:
   # SA token 접근
-  - call: "security_file_open"
-    syscall: false
+  - call: "__x64_sys_openat"
+    syscall: true
     args:
-    - index: 0
-      type: "file"
+    - index: 1
+      type: "string"
     selectors:
     - matchArgs:
-      - index: 0
+      - index: 1
         operator: "Prefix"
         values:
         - "/var/run/secrets/kubernetes.io/serviceaccount"
 
   # 민감 파일 접근
-  - call: "security_file_open"
-    syscall: false
+  - call: "__x64_sys_openat"
+    syscall: true
     args:
-    - index: 0
-      type: "file"
+    - index: 1
+      type: "string"
     selectors:
     - matchArgs:
-      - index: 0
+      - index: 1
         operator: "Prefix"
         values:
         - "/proc/1"
@@ -47,7 +47,7 @@ spec:
         - "169.254.169.254/32"
 
   # 의심 프로세스
-  - call: "sys_execve"
+  - call: "__x64_sys_execve"
     syscall: true
     args:
     - index: 0
