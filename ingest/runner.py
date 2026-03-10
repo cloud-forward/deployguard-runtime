@@ -83,9 +83,37 @@ def collect_audit_events(log_path: str = "/var/log/kubernetes/audit/audit.log") 
         return []
 
 
+def get_pod_sa_map() -> dict:
+    """pod_name → service_account 매핑 테이블"""
+    try:
+        result = subprocess.run(
+            [
+                "kubectl", "get", "pods",
+                "--all-namespaces",
+                "-o", "jsonpath={range .items[*]}{.metadata.namespace}/{.metadata.name}={.spec.serviceAccountName}\\n{end}",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        mapping = {}
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            try:
+                key, sa = line.split("=")
+                mapping[key] = sa
+            except Exception:
+                continue
+        return mapping
+    except Exception as e:
+        print(f"[ERROR] Pod SA 매핑 실패: {e}")
+        return {}
+
+
 def run():
     print(f"[{datetime.now()}] 스캐너 시작")
     system_namespaces = get_system_namespaces()
+    pod_sa_map = get_pod_sa_map()
 
     # 1. 수집
     tetragon_events = collect_tetragon_events(since="2m")
@@ -119,9 +147,15 @@ def run():
             continue
         evidences.append(evidence)
 
+    # 3. service_account null 채우기
+    for e in evidences:
+        if e.service_account is None and e.pod_name and e.namespace:
+            key = f"{e.namespace}/{e.pod_name}"
+            e.service_account = pod_sa_map.get(key)
+
     print(f"[INFO] Evidence 생성: {len(evidences)}개")
 
-    # 3. JSON 파일로 저장
+    # 4. JSON 파일로 저장
     if evidences:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
         output_path = OUTPUT_DIR / f"evidence_{timestamp}.json"
