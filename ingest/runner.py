@@ -121,14 +121,23 @@ def run():
     print(f"[INFO] Tetragon 이벤트: {len(tetragon_events)}개")
     print(f"[INFO] Audit 이벤트: {len(audit_events)}개")
 
-    # 2. Evidence 변환
+    # 2. raw JSON 저장 (엔진단 협의용)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    raw_path = OUTPUT_DIR / f"raw_{timestamp}.json"
+    with open(raw_path, "w") as f:
+        json.dump(
+            {"tetragon": tetragon_events, "audit": audit_events},
+            f, indent=2, ensure_ascii=False
+        )
+    print(f"[RAW] {raw_path}")
+
+    # 3. Evidence 변환
     evidences = []
 
     # Tetragon 중복 제거용 set
     seen_tetragon_keys = set()
 
     for raw in tetragon_events:
-        # exec_id + function_name으로 중복 제거
         kprobe = raw.get("process_kprobe")
         exec_event = raw.get("process_exec")
         block = kprobe or exec_event
@@ -154,7 +163,6 @@ def run():
     seen_audit_ids = set()
 
     for raw in audit_events:
-        # auditID로 중복 제거
         audit_id = raw.get("auditID")
         if audit_id:
             if audit_id in seen_audit_ids:
@@ -171,7 +179,7 @@ def run():
             continue
         evidences.append(evidence)
 
-    # 3. service_account null 채우기
+    # 4. service_account null 채우기
     for e in evidences:
         if e.service_account is None and e.pod_name and e.namespace:
             key = f"{e.namespace}/{e.pod_name}"
@@ -179,9 +187,8 @@ def run():
 
     print(f"[INFO] Evidence 생성: {len(evidences)}개")
 
-    # 4. JSON 파일로 저장
+    # 5. Evidence JSON 저장
     if evidences:
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
         output_path = OUTPUT_DIR / f"evidence_{timestamp}.json"
 
         output = [
