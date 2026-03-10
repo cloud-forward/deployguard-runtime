@@ -28,6 +28,7 @@ def normalize(raw: dict) -> NormalizedEvent | None:
     sa_token_paths = rules.get("sa_token_paths", [])
     sensitive_paths = rules.get("sensitive_paths", [])
     suspicious_binaries = rules.get("suspicious_binaries", [])
+    imds_addresses = rules.get("imds_addresses", [])
 
     # process_kprobe (파일/네트워크 접근)
     kprobe = raw.get("process_kprobe")
@@ -38,15 +39,21 @@ def normalize(raw: dict) -> NormalizedEvent | None:
         args = kprobe.get("args", [])
         timestamp = raw.get("time", datetime.utcnow().isoformat())
 
-        if func in ("sys_open", "sys_openat", "security_file_open"):
+        if func in ("__x64_sys_openat", "sys_open", "sys_openat", "security_file_open"):
             category = EventCategory.FILE
             action = "open"
-            target = next((a["file_arg"]["path"] for a in args if "file_arg" in a), None)
+            target = next((a["string_arg"] for a in args if "string_arg" in a), None)
+
         elif func == "tcp_connect":
+            sock = next((a["sock_arg"] for a in args if "sock_arg" in a), {})
+            daddr = sock.get("daddr")
+            # IMDS 주소가 아니면 무시
+            if daddr not in imds_addresses:
+                return None
             category = EventCategory.NETWORK
             action = "connect"
-            sock = next((a["sock_arg"] for a in args if "sock_arg" in a), {})
-            target = sock.get("daddr")
+            target = daddr
+
         else:
             category = EventCategory.PROCESS
             action = func
