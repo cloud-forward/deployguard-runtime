@@ -124,7 +124,22 @@ def run():
     # 2. Evidence 변환
     evidences = []
 
+    # Tetragon 중복 제거용 set
+    seen_tetragon_keys = set()
+
     for raw in tetragon_events:
+        # exec_id + function_name으로 중복 제거
+        kprobe = raw.get("process_kprobe")
+        exec_event = raw.get("process_exec")
+        block = kprobe or exec_event
+        if block:
+            exec_id = block.get("process", {}).get("exec_id", "")
+            func = raw.get("process_kprobe", {}).get("function_name", "exec")
+            dedup_key = f"{exec_id}_{func}"
+            if dedup_key in seen_tetragon_keys:
+                continue
+            seen_tetragon_keys.add(dedup_key)
+
         event = tetragon_normalize(raw)
         if not event:
             continue
