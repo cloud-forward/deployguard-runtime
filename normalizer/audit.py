@@ -29,6 +29,7 @@ def normalize(raw: dict) -> NormalizedEvent | None:
         category=EventCategory.K8S_API,
         actor=WorkloadContext(
             namespace=obj.get("namespace"),
+            pod_name=obj.get("name") if obj.get("resource") == "pods" else None,
             service_account=sa,
         ),
         action=raw.get("verb", ""),
