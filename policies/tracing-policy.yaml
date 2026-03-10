@@ -44,7 +44,7 @@ spec:
       - index: 0
         operator: "DAddr"
         values:
-        - "169.254.169.254/32"
+        - "169.254.169.254"
 
   # 의심 프로세스
   - call: "__x64_sys_execve"
