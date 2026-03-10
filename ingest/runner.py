@@ -135,7 +135,17 @@ def run():
             continue
         evidences.append(evidence)
 
+    # Audit 중복 제거용 set
+    seen_audit_ids = set()
+
     for raw in audit_events:
+        # auditID로 중복 제거
+        audit_id = raw.get("auditID")
+        if audit_id:
+            if audit_id in seen_audit_ids:
+                continue
+            seen_audit_ids.add(audit_id)
+
         event = audit_normalize(raw)
         if not event:
             continue
