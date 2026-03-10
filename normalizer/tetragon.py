@@ -47,9 +47,6 @@ def normalize(raw: dict) -> NormalizedEvent | None:
         elif func == "tcp_connect":
             sock = next((a["sock_arg"] for a in args if "sock_arg" in a), {})
             daddr = sock.get("daddr")
-            # IMDS 주소가 아니면 무시
-            if daddr not in imds_addresses:
-                return None
             category = EventCategory.NETWORK
             action = "connect"
             target = daddr
@@ -79,25 +76,27 @@ def normalize(raw: dict) -> NormalizedEvent | None:
         binary = process.get("binary", "")
         arguments = process.get("arguments", "")
 
-        if any(p in arguments for p in sa_token_paths):
+        # 1순위: suspicious binary 먼저 체크
+        if any(binary.endswith(b) for b in suspicious_binaries):
+            category = EventCategory.PROCESS
+            action = "exec"
+            target = binary
+
+        # 2순위: SA token 경로가 arguments에 있으면
+        elif any(p in arguments for p in sa_token_paths):
             category = EventCategory.FILE
             action = "open"
             target = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 
+        # 3순위: 민감 경로가 arguments에 있으면
         elif any(p in arguments for p in sensitive_paths):
             category = EventCategory.FILE
             action = "open"
             target = arguments
 
-        elif any(binary.endswith(b) for b in suspicious_binaries):
-            category = EventCategory.PROCESS
-            action = "exec"
-            target = binary
-
+        # 나머지는 그냥 버려 (정상 프로세스)
         else:
-            category = EventCategory.PROCESS
-            action = "exec"
-            target = binary
+            return None
 
         return NormalizedEvent(
             event_id=str(uuid.uuid4()),
