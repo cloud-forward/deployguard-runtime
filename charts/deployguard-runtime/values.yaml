@@ -156,3 +156,11 @@ service:
   port: 9090
   targetPort: 9090
   annotations: {}
+
+# Tetragon (eBPF 런타임 감시)
+tetragon:
+  enabled: true
+  tracingPolicy:
+    enabled: true
+
+# Audit 로그 마운트 추가
