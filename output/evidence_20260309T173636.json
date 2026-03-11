@@ -1,0 +1,30 @@
+[
+  {
+    "evidence_id": "2bfe9d58-3b62-4737-af25-1b350c245a9e",
+    "evidence_type": "SUSPICIOUS_EXECUTION",
+    "timestamp": "2026-03-09T17:36:12.947100+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": null,
+    "source": "tetragon",
+    "detail": {
+      "action": "exec",
+      "target": "/usr/bin/cat"
+    }
+  },
+  {
+    "evidence_id": "e7370a4d-8de5-43cd-b825-c7bd1b08458b",
+    "evidence_type": "SUSPICIOUS_EXECUTION",
+    "timestamp": "2026-03-09T17:36:35.049963+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": null,
+    "source": "tetragon",
+    "detail": {
+      "action": "exec",
+      "target": "/usr/bin/cat"
+    }
+  }
+]

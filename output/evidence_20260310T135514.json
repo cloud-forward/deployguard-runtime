@@ -1,0 +1,295 @@
+[
+  {
+    "evidence_id": "7482b303-893f-4f8f-8a23-72a73a3789bc",
+    "evidence_type": "ACCESSED_SA_TOKEN",
+    "timestamp": "2026-03-10T13:53:30.340632+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": "ip-10-10-30-44",
+    "source": "tetragon",
+    "detail": {
+      "path": "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+    }
+  },
+  {
+    "evidence_id": "3f97fdb1-183b-4b3d-9aca-47388ab28d01",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:47:55.999336+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "c48e5f96-3a2a-425b-8b33-98b75d36ed1f",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:47:55.999336+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "c0688ed3-f151-4a00-93f3-68a132127cd5",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:47:55.999336+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "502270bd-ca07-4f08-a027-1fdc73650d74",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:49:23.587497+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "650cd923-7086-4308-8be5-23e3a99ce043",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:49:23.587497+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "d9dc72da-797b-4cab-a4e1-5494df8c8415",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:49:23.587497+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "01dc6bf9-15e3-45e8-9f66-8519570791df",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:49:52.211706+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "d96bd25e-458a-49cc-8390-e67a4acb3c84",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:49:52.211706+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "28181c88-cd07-4892-9b26-ca82cfc81e79",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:49:52.211706+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "6b49eb26-9d96-4463-b3d5-134b8b05d711",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:51:33.965210+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "13b76c19-fcb6-4281-b136-ecce677df262",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:51:33.965210+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "526a7d69-a095-40d0-beb7-7501102c0da0",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:51:33.965210+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "3fef81e2-965c-4a2a-a442-6a5c99cd3a97",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:53:14.153529+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "c8875bc6-2038-4b2f-8c08-960bcc878aee",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:53:14.153529+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "a5c4c401-f9a6-4d76-b1d3-e16deaea516e",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:53:14.153529+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "65f76512-e119-4853-aa01-e4004776cbec",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:53:30.253195+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "10d55edc-b0af-4810-8262-30ec1ce596b7",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:53:30.253195+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "15a5795f-a4a9-4de2-adeb-e008ac16fac1",
+    "evidence_type": "LIST_SECRET",
+    "timestamp": "2026-03-10T13:53:30.347477+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": "vulnerable-sa",
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "secret_name": null,
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "7cf93599-ad4b-496f-9f29-ab049cf77339",
+    "evidence_type": "LIST_SECRET",
+    "timestamp": "2026-03-10T13:53:30.347477+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": "vulnerable-sa",
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "secret_name": null,
+      "namespace": "default"
+    }
+  },
+  {
+    "evidence_id": "6e9489b8-7276-4965-a469-4bf91d3d38fe",
+    "evidence_type": "POD_EXEC_REQUEST",
+    "timestamp": "2026-03-10T13:53:30.253195+00:00",
+    "namespace": "default",
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "pod": "vulnerable-pod",
+      "namespace": "default"
+    }
+  }
+]

@@ -1,3 +1,4 @@
+import time
 import subprocess
 import json
 import sys
@@ -216,5 +217,10 @@ def run():
         print("[INFO] Evidence 없음")
 
 
+
+
+
 if __name__ == "__main__":
-    run()
+    while True:
+        run()
+        time.sleep(120)

@@ -1,0 +1,16 @@
+[
+  {
+    "evidence_id": "e7ae6b30-0c48-4385-8753-61deeb85d0b3",
+    "evidence_type": "SUSPICIOUS_EXECUTION",
+    "timestamp": "2026-03-09T17:25:02.274549+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": null,
+    "source": "tetragon",
+    "detail": {
+      "action": "exec",
+      "target": "/usr/bin/cat"
+    }
+  }
+]

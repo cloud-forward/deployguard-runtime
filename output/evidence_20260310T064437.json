@@ -1,0 +1,15 @@
+[
+  {
+    "evidence_id": "b62b2b49-0035-4fa8-a481-0856ffda6748",
+    "evidence_type": "ACCESSED_SA_TOKEN",
+    "timestamp": "2026-03-10T06:43:50.976757+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": "ip-10-10-30-44",
+    "source": "tetragon",
+    "detail": {
+      "path": "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    }
+  }
+]

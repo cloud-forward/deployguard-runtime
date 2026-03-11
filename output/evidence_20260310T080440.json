@@ -1,0 +1,16 @@
+[
+  {
+    "evidence_id": "f98071a2-8256-40d0-8af5-ce36c0f0817e",
+    "evidence_type": "SUSPICIOUS_EXECUTION",
+    "timestamp": "2026-03-10T08:04:40.022898+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": "ip-10-10-30-44",
+    "source": "tetragon",
+    "detail": {
+      "action": "exec",
+      "target": "/usr/bin/curl"
+    }
+  }
+]

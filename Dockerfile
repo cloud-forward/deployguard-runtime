@@ -2,6 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Python 버퍼링 비활성화
+ENV PYTHONUNBUFFERED=1
+
 # kubectl 설치
 RUN apt-get update && apt-get install -y curl && \
     curl -LO "https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl" && \
@@ -15,4 +18,4 @@ RUN pip install -r requirements.txt
 # 코드 복사
 COPY . .
 
-CMD ["python3", "ingest/runner.py"]
+CMD ["python3", "-u", "ingest/runner.py"]

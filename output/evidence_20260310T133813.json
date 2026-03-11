@@ -1,0 +1,58 @@
+[
+  {
+    "evidence_id": "30a1d9a8-a300-4506-b736-6f77987ea4bb",
+    "evidence_type": "LIST_SECRET",
+    "timestamp": "2026-03-10T13:27:29.479082+00:00",
+    "namespace": null,
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "secret_name": null,
+      "namespace": null
+    }
+  },
+  {
+    "evidence_id": "8f84bc1e-53d3-4a78-924d-d6a25785586a",
+    "evidence_type": "LIST_SECRET",
+    "timestamp": "2026-03-10T13:27:29.479082+00:00",
+    "namespace": null,
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "secret_name": null,
+      "namespace": null
+    }
+  },
+  {
+    "evidence_id": "631d5e75-314b-4a9d-b3d3-add6793041ec",
+    "evidence_type": "LIST_SECRET",
+    "timestamp": "2026-03-10T13:27:47.462962+00:00",
+    "namespace": null,
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "secret_name": null,
+      "namespace": null
+    }
+  },
+  {
+    "evidence_id": "bc2e56a2-c806-442a-9e6a-f8a59a382a52",
+    "evidence_type": "LIST_SECRET",
+    "timestamp": "2026-03-10T13:27:47.462962+00:00",
+    "namespace": null,
+    "pod_name": null,
+    "service_account": null,
+    "node_name": null,
+    "source": "k8s_audit",
+    "detail": {
+      "secret_name": null,
+      "namespace": null
+    }
+  }
+]

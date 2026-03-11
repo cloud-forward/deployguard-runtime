@@ -1,0 +1,67 @@
+[
+  {
+    "evidence_id": "71d12a7f-030a-4b11-9344-d2d0e273b5ba",
+    "evidence_type": "ACCESSED_SA_TOKEN",
+    "timestamp": "2026-03-09T17:45:41.063671+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": null,
+    "source": "tetragon",
+    "detail": {
+      "path": "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    }
+  },
+  {
+    "evidence_id": "9df25bc7-0f37-43ee-b4b1-13a15eeda2f0",
+    "evidence_type": "ACCESSED_SA_TOKEN",
+    "timestamp": "2026-03-09T17:45:50.355411+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": null,
+    "source": "tetragon",
+    "detail": {
+      "path": "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    }
+  },
+  {
+    "evidence_id": "3afdf10d-6d8d-43be-a4d2-a33f16d145a8",
+    "evidence_type": "ACCESSED_SA_TOKEN",
+    "timestamp": "2026-03-09T17:46:37.971230+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": null,
+    "source": "tetragon",
+    "detail": {
+      "path": "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    }
+  },
+  {
+    "evidence_id": "737774ec-ffab-49cb-85f7-b1eb04d2db6e",
+    "evidence_type": "ACCESSED_SA_TOKEN",
+    "timestamp": "2026-03-09T17:46:37.987945+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": null,
+    "source": "tetragon",
+    "detail": {
+      "path": "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    }
+  },
+  {
+    "evidence_id": "15ab5451-ae02-47df-831f-1562d64ade2e",
+    "evidence_type": "ACCESSED_HOST_SENSITIVE_PATH",
+    "timestamp": "2026-03-09T17:46:37.995464+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": null,
+    "source": "tetragon",
+    "detail": {
+      "path": "/proc/1/environ"
+    }
+  }
+]
