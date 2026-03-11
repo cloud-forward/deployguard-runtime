@@ -164,3 +164,5 @@ tetragon:
     enabled: true
 
 # Audit 로그 마운트 추가
+auditSetup:
+  enabled: true
