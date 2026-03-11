@@ -1,0 +1,158 @@
+# Default values for deployguard-runtime
+# This is a YAML-formatted file.
+
+image:
+  repository: deployguard-runtime
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# Image pull secrets (e.g. for private registries)
+imagePullSecrets: []
+# - name: regcred
+
+# DaemonSet update strategy
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+
+# Resource limits and requests
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# Node selector - target specific nodes
+nodeSelector: {}
+# kubernetes.io/os: linux
+
+# Tolerations - run on tainted nodes (e.g. master, GPU nodes)
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+  - key: node-role.kubernetes.io/master
+    operator: Exists
+    effect: NoSchedule
+
+# Affinity rules
+affinity: {}
+
+# Security context for the Pod
+podSecurityContext:
+  runAsNonRoot: false  # Runtime agents often need root
+
+# Security context for the container
+securityContext:
+  privileged: false
+  capabilities:
+    add:
+      - SYS_PTRACE   # process inspection
+      - NET_ADMIN    # network monitoring
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+
+# Host access - common for runtime agents
+hostPID: false        # set true if process-level monitoring needed
+hostNetwork: false    # set true if host network inspection needed
+hostIPC: false
+
+# Volume mounts - expose host paths into the container
+volumeMounts:
+  - name: host-proc
+    mountPath: /host/proc
+    readOnly: true
+  - name: host-sys
+    mountPath: /host/sys
+    readOnly: true
+  - name: host-root
+    mountPath: /host/root
+    readOnly: true
+    mountPropagation: HostToContainer
+
+volumes:
+  - name: host-proc
+    hostPath:
+      path: /proc
+  - name: host-sys
+    hostPath:
+      path: /sys
+  - name: host-root
+    hostPath:
+      path: /
+
+# Environment variables passed to the agent
+env: {}
+# LOG_LEVEL: info
+# AGENT_MODE: monitor
+
+# ConfigMap for agent configuration
+config:
+  enabled: true
+  data:
+    agent.yaml: |
+      log_level: info
+      mode: monitor
+
+# Secret for sensitive config (API keys, tokens, etc.)
+secret:
+  enabled: false
+  # If you have an existing secret, set name here and leave data empty
+  existingSecret: ""
+  data: {}
+  # DEPLOYGUARD_API_KEY: "your-api-key-here"
+
+# ServiceAccount
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  # For EKS IRSA (IAM Roles for Service Accounts):
+  # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/ROLE_NAME
+
+# RBAC - ClusterRole + ClusterRoleBinding
+rbac:
+  create: true
+
+# Pod annotations
+podAnnotations: {}
+# prometheus.io/scrape: "true"
+# prometheus.io/port: "9090"
+
+# Pod labels
+podLabels: {}
+
+# Priority class for the DaemonSet pods
+priorityClassName: ""
+
+# DNS config
+dnsPolicy: ClusterFirst
+
+# Liveness and readiness probes
+livenessProbe:
+  enabled: false
+  httpGet:
+    path: /healthz
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 30
+
+readinessProbe:
+  enabled: false
+  httpGet:
+    path: /readyz
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+# Optional: expose metrics via a Service (for Prometheus scraping)
+service:
+  enabled: false
+  type: ClusterIP
+  port: 9090
+  targetPort: 9090
+  annotations: {}

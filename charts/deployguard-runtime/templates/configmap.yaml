@@ -1,0 +1,11 @@
+{{- if .Values.config.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "deployguard-runtime.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "deployguard-runtime.labels" . | nindent 4 }}
+data:
+  {{- toYaml .Values.config.data | nindent 2 }}
+{{- end }}

@@ -1,0 +1,14 @@
+apiVersion: v2
+name: deployguard-runtime
+description: DeployGuard Runtime Agent - deployed as a DaemonSet on every node
+type: application
+version: 0.1.0
+appVersion: "latest"
+keywords:
+  - security
+  - runtime
+  - monitoring
+  - daemonset
+maintainers:
+  - name: DeployGuard
+home: https://deployguard.io
