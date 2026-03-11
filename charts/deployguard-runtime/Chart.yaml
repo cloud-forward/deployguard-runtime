@@ -12,3 +12,8 @@ keywords:
 maintainers:
   - name: DeployGuard
 home: https://deployguard.io
+dependencies:
+  - name: tetragon
+    version: "1.3.0"
+    repository: "https://helm.cilium.io"
+    condition: tetragon.enabled
