@@ -1,11 +1,16 @@
 tetragon:
   sa_token_paths:
     - "/var/run/secrets/kubernetes.io/serviceaccount"
+
   sensitive_paths:
     - "/proc/1"
     - "/etc/shadow"
     - "/etc/kubernetes"
     - "/var/lib/kubelet"
+    - "/run/containerd"
+    - "/run/docker.sock"
+    - "/var/run/docker.sock"
+
   suspicious_binaries:
     - "/curl"
     - "/nmap"
@@ -14,9 +19,30 @@ tetragon:
     - "/sh"
     - "/wget"
     - "/python"
+    - "/python3"
     - "/nc"
+    - "/netcat"
+    - "/socat"
+    - "/perl"
+    - "/ruby"
+
   imds_addresses:
     - "169.254.169.254"
+
+  kube_api_targets:
+    - "10.96.0.1"
+    - "kubernetes.default.svc"
+    - "kubernetes.default"
+
+  # kprobe 함수명 — tetragon normalizer가 참조
+  file_open_functions:
+    - "__x64_sys_openat"
+    - "sys_open"
+    - "sys_openat"
+    - "security_file_open"
+
+  network_connect_functions:
+    - "tcp_connect"
 
 system_namespaces:
   - "kube-system"
@@ -24,6 +50,8 @@ system_namespaces:
   - "kube-node-lease"
   - "kube-public"
   - "ingress-nginx"
+  - "cert-manager"
+  - "monitoring"
 
 system_users:
   - "system:kube-controller-manager"
@@ -31,3 +59,40 @@ system_users:
   - "system:node"
   - "system:apiserver"
   - "system:kube-proxy"
+  - "system:serviceaccount:kube-system:"
+
+# Kubernetes Audit 이벤트 매핑 규칙
+# 새로운 resource/verb 쌍을 추가하면 mapper가 자동으로 인식
+audit_rules:
+  - resource: "secrets"
+    verb: "get"
+    evidence_type: "READ_SECRET"
+
+  - resource: "secrets"
+    verb: "list"
+    evidence_type: "LIST_SECRET"
+
+  - resource: "cronjobs"
+    verb: "create"
+    evidence_type: "CREATED_CRONJOB"
+
+  - resource: "daemonsets"
+    verb: "create"
+    evidence_type: "CREATED_DAEMONSET"
+
+  - resource: "rolebindings"
+    verb: "create"
+    evidence_type: "CREATED_ROLEBINDING"
+
+  - resource: "clusterrolebindings"
+    verb: "create"
+    evidence_type: "CREATED_ROLEBINDING"
+
+  # 향후 추가 예시
+  # - resource: "deployments"
+  #   verb: "create"
+  #   evidence_type: "CREATED_DEPLOYMENT"
+  #
+  # - resource: "serviceaccounts"
+  #   verb: "create"
+  #   evidence_type: "CREATED_SERVICEACCOUNT"
