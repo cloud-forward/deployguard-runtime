@@ -22,6 +22,7 @@ COPY config config/
 COPY schemas schemas/
 COPY ingest ingest/
 COPY normalizer normalizer/
+COPY evidence_mapper evidence_mapper/ 
 
 # 실행
 CMD ["python", "-u", "ingest/runner.py"]
