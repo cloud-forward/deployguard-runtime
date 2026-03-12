@@ -6,12 +6,16 @@ metadata:
   labels:
     {{- include "deployguard.labels" . | nindent 4 }}
 rules:
-# Pod 정보 읽기 (SA 매핑)
+# Pod 정보 읽기 (SA 매핑용)
 - apiGroups: [""]
   resources: ["pods"]
   verbs: ["get", "list"]
-# Tetragon 로그 읽기
+# Tetragon Pod 로그 읽기
 - apiGroups: [""]
   resources: ["pods/log"]
   verbs: ["get"]
+# Namespace 목록 읽기
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list"]
 {{- end }}

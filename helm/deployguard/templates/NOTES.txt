@@ -1,0 +1,29 @@
+DeployGuard Scanner가 설치되었습니다!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+설치 정보
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Release : {{ .Release.Name }}
+  Namespace: {{ .Release.Namespace }}
+  Interval : {{ .Values.scanner.interval }}s
+
+데이터 소스:
+  Tetragon : {{ .Values.dataSources.tetragon.enabled }}
+  Audit    : {{ .Values.dataSources.audit.enabled }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+로그 확인
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/name=deployguard -f
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Evidence 확인
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+kubectl exec -n {{ .Release.Namespace }} \
+  $(kubectl get pod -n {{ .Release.Namespace }} -l app.kubernetes.io/name=deployguard -o name | head -1) \
+  -- ls {{ .Values.scanner.outputDir }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Tetragon이 없는 경우
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+helm upgrade deployguard . --set dataSources.tetragon.install=true

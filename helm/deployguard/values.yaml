@@ -1,34 +1,33 @@
-# Docker 이미지 설정
+# ── 이미지 ────────────────────────────────────────────────────────────
 image:
-  repository: deployguard/scanner
+  repository: doosanbears/deployguard-scanner
   tag: "latest"
   pullPolicy: IfNotPresent
 
-# 스캐너 설정
+# ── 스캐너 공통 설정 ──────────────────────────────────────────────────
 scanner:
-  # 스캔 주기 (초)
-  interval: 120
-  # 출력 디렉토리
+  interval: 300          # 스캔 주기 (초)
   outputDir: "/tmp/evidence"
+  debug: false
+  saveRaw: false
 
-# 데이터 소스 설정
+# ── 데이터 소스 ───────────────────────────────────────────────────────
 dataSources:
-  # Tetragon 설정
+
   tetragon:
     enabled: true
+    # Tetragon이 설치되어 있지 않은 경우 install: true 로 함께 설치
+    install: false
     namespace: "kube-system"
     podLabelSelector: "app.kubernetes.io/name=tetragon"
     containerName: "export-stdout"
-  
-  # Audit 로그 설정
+
   audit:
     enabled: true
-    # 노드의 audit 로그 경로
     logPath: "/var/log/kubernetes/audit/audit.log"
-    # 마스터 노드에만 배포할지 여부
-    masterOnly: false
+    tailLines: 1000
 
-# 리소스 제한
+# ── 리소스 ────────────────────────────────────────────────────────────
 resources:
   limits:
     memory: "512Mi"
@@ -37,23 +36,33 @@ resources:
     memory: "256Mi"
     cpu: "100m"
 
-# ServiceAccount
+# ── ServiceAccount / RBAC ─────────────────────────────────────────────
 serviceAccount:
   create: true
-  name: ""  # 비워두면 자동 생성
+  name: ""   # 비워두면 release 이름으로 자동 생성
 
-# 노드 선택자 (audit 로그가 있는 노드)
+# ── 노드 배포 제어 ────────────────────────────────────────────────────
+# audit 로그는 control-plane 노드에만 있으므로 기본 toleration 포함
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+  - key: node-role.kubernetes.io/master
+    operator: Exists
+    effect: NoSchedule
+
 nodeSelector: {}
+  # 특정 노드만 배포하려면:
   # node-role.kubernetes.io/control-plane: ""
 
-# 보안 컨텍스트
+# ── 보안 컨텍스트 ─────────────────────────────────────────────────────
 securityContext:
   runAsNonRoot: true
   runAsUser: 1000
   fsGroup: 2000
 
-# 설정 오버라이드
+# ── rules.yaml 오버라이드 ─────────────────────────────────────────────
+# true 로 설정하고 rules 아래에 직접 작성하면 ConfigMap 내용이 교체됨
 config:
-  # rules.yaml 내용을 오버라이드하려면 여기에 작성
   override: false
   rules: {}

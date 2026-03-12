@@ -2,6 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ include "deployguard.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "deployguard.labels" . | nindent 4 }}
 data:
@@ -17,6 +18,9 @@ data:
         - "/etc/shadow"
         - "/etc/kubernetes"
         - "/var/lib/kubelet"
+        - "/run/containerd"
+        - "/run/docker.sock"
+        - "/var/run/docker.sock"
       suspicious_binaries:
         - "/curl"
         - "/nmap"
@@ -25,19 +29,57 @@ data:
         - "/sh"
         - "/wget"
         - "/python"
+        - "/python3"
         - "/nc"
+        - "/netcat"
+        - "/socat"
+        - "/perl"
+        - "/ruby"
       imds_addresses:
         - "169.254.169.254"
+      kube_api_targets:
+        - "10.96.0.1"
+        - "kubernetes.default.svc"
+        - "kubernetes.default"
+      file_open_functions:
+        - "__x64_sys_openat"
+        - "sys_open"
+        - "sys_openat"
+        - "security_file_open"
+      network_connect_functions:
+        - "tcp_connect"
     system_namespaces:
       - "kube-system"
       - "kube-flannel"
       - "kube-node-lease"
       - "kube-public"
       - "ingress-nginx"
+      - "cert-manager"
+      - "monitoring"
     system_users:
       - "system:kube-controller-manager"
       - "system:kube-scheduler"
       - "system:node"
       - "system:apiserver"
       - "system:kube-proxy"
+      - "system:serviceaccount:kube-system:"
+    audit_rules:
+      - resource: "secrets"
+        verb: "get"
+        evidence_type: "READ_SECRET"
+      - resource: "secrets"
+        verb: "list"
+        evidence_type: "LIST_SECRET"
+      - resource: "cronjobs"
+        verb: "create"
+        evidence_type: "CREATED_CRONJOB"
+      - resource: "daemonsets"
+        verb: "create"
+        evidence_type: "CREATED_DAEMONSET"
+      - resource: "rolebindings"
+        verb: "create"
+        evidence_type: "CREATED_ROLEBINDING"
+      - resource: "clusterrolebindings"
+        verb: "create"
+        evidence_type: "CREATED_ROLEBINDING"
     {{- end }}
