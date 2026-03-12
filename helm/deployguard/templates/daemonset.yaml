@@ -62,7 +62,8 @@ spec:
 
         volumeMounts:
         - name: config
-          mountPath: /app/config
+          mountPath: /app/config/rules.yaml
+          subPath: rules.yaml
           readOnly: true
         - name: output
           mountPath: {{ .Values.scanner.outputDir }}
