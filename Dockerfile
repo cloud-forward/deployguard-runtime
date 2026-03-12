@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY config config/
 COPY schemas schemas/
 COPY ingest ingest/
-COPY normalizer normalizer/  # 이 라인 추가!
+COPY normalizer normalizer/
 
 # 실행
 CMD ["python", "-u", "ingest/runner.py"]
