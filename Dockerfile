@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y curl && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 애플리케이션 코드 - normalizer 디렉토리 추가!
+# 애플리케이션 코드 
 COPY config config/
 COPY schemas schemas/
 COPY ingest ingest/
