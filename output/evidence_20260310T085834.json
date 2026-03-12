@@ -1,0 +1,56 @@
+[
+  {
+    "evidence_id": "8708c5ce-0d64-44a0-8eae-c0219a95a500",
+    "evidence_type": "SUSPICIOUS_EXECUTION",
+    "timestamp": "2026-03-10T08:57:27.005708+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": "ip-10-10-30-44",
+    "source": "tetragon",
+    "detail": {
+      "action": "exec",
+      "target": "/usr/bin/curl"
+    }
+  },
+  {
+    "evidence_id": "af5854e8-f507-4e9b-aa24-44f87899b167",
+    "evidence_type": "ACCESSED_IMDS",
+    "timestamp": "2026-03-10T08:57:27.014120+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": "ip-10-10-30-44",
+    "source": "tetragon",
+    "detail": {
+      "destination": "169.254.169.254"
+    }
+  },
+  {
+    "evidence_id": "ffd1b68b-69bc-4f56-9543-dacfa61398ec",
+    "evidence_type": "SUSPICIOUS_EXECUTION",
+    "timestamp": "2026-03-10T08:57:37.324533+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": "ip-10-10-30-44",
+    "source": "tetragon",
+    "detail": {
+      "action": "exec",
+      "target": "/usr/bin/curl"
+    }
+  },
+  {
+    "evidence_id": "9b3663d3-163e-4b20-9ddc-8d36c53f1b3b",
+    "evidence_type": "ACCESSED_IMDS",
+    "timestamp": "2026-03-10T08:57:37.331686+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": "ip-10-10-30-44",
+    "source": "tetragon",
+    "detail": {
+      "destination": "169.254.169.254"
+    }
+  }
+]

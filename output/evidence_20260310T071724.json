@@ -1,0 +1,41 @@
+[
+  {
+    "evidence_id": "5af1946b-f501-4077-9ba0-cea2828912ff",
+    "evidence_type": "ACCESSED_SA_TOKEN",
+    "timestamp": "2026-03-10T07:17:23.680671+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": "ip-10-10-30-44",
+    "source": "tetragon",
+    "detail": {
+      "path": "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    }
+  },
+  {
+    "evidence_id": "bf22b08e-ccba-4179-839f-fb0439cf378f",
+    "evidence_type": "ACCESSED_SA_TOKEN",
+    "timestamp": "2026-03-10T07:17:23.683568+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": "ip-10-10-30-44",
+    "source": "tetragon",
+    "detail": {
+      "path": "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    }
+  },
+  {
+    "evidence_id": "110c03f3-7cc2-4b20-b54a-3d76b9098370",
+    "evidence_type": "ACCESSED_HOST_SENSITIVE_PATH",
+    "timestamp": "2026-03-10T07:17:23.690921+00:00",
+    "namespace": "default",
+    "pod_name": "vulnerable-pod",
+    "service_account": null,
+    "node_name": "ip-10-10-30-44",
+    "source": "tetragon",
+    "detail": {
+      "path": "/proc/1/environ"
+    }
+  }
+]
