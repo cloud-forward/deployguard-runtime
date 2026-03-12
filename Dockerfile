@@ -4,6 +4,8 @@ WORKDIR /app
 
 # Python 버퍼링 비활성화
 ENV PYTHONUNBUFFERED=1
+# Python 경로 설정 추가
+ENV PYTHONPATH=/app
 
 # kubectl 설치
 RUN apt-get update && apt-get install -y curl && \
@@ -15,10 +17,11 @@ RUN apt-get update && apt-get install -y curl && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 애플리케이션 코드
+# 애플리케이션 코드 - normalizer 디렉토리 추가!
 COPY config config/
 COPY schemas schemas/
 COPY ingest ingest/
+COPY normalizer normalizer/  # 이 라인 추가!
 
 # 실행
 CMD ["python", "-u", "ingest/runner.py"]
