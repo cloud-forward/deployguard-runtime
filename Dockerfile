@@ -6,13 +6,16 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y curl && \
     curl -LO "https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl" && \
     chmod +x kubectl && mv kubectl /usr/local/bin/kubectl && \
-    apt-get clean
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# 의존성 설치
+# 의존성
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# 코드 복사
-COPY . .
+# 애플리케이션 코드
+COPY config config/
+COPY schemas schemas/
+COPY ingest ingest/
 
-CMD ["python3", "ingest/runner.py"]
+# 실행
+CMD ["python", "-u", "ingest/runner.py"]

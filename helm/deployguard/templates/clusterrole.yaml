@@ -1,0 +1,17 @@
+{{- if .Values.serviceAccount.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "deployguard.fullname" . }}
+  labels:
+    {{- include "deployguard.labels" . | nindent 4 }}
+rules:
+# Pod 정보 읽기 (SA 매핑)
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+# Tetragon 로그 읽기
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get"]
+{{- end }}

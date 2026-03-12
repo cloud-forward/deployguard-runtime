@@ -1,0 +1,8 @@
+apiVersion: v2
+name: deployguard
+description: Runtime Security Scanner for Kubernetes
+type: application
+version: 1.0.0
+appVersion: "1.0"
+maintainers:
+  - name: DeployGuard Team

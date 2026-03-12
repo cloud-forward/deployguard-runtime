@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "deployguard.fullname" . }}-config
+  labels:
+    {{- include "deployguard.labels" . | nindent 4 }}
+data:
+  rules.yaml: |
+    {{- if .Values.config.override }}
+    {{- toYaml .Values.config.rules | nindent 4 }}
+    {{- else }}
+    tetragon:
+      sa_token_paths:
+        - "/var/run/secrets/kubernetes.io/serviceaccount"
+      sensitive_paths:
+        - "/proc/1"
+        - "/etc/shadow"
+        - "/etc/kubernetes"
+        - "/var/lib/kubelet"
+      suspicious_binaries:
+        - "/curl"
+        - "/nmap"
+        - "/nsenter"
+        - "/bash"
+        - "/sh"
+        - "/wget"
+        - "/python"
+        - "/nc"
+      imds_addresses:
+        - "169.254.169.254"
+    system_namespaces:
+      - "kube-system"
+      - "kube-flannel"
+      - "kube-node-lease"
+      - "kube-public"
+      - "ingress-nginx"
+    system_users:
+      - "system:kube-controller-manager"
+      - "system:kube-scheduler"
+      - "system:node"
+      - "system:apiserver"
+      - "system:kube-proxy"
+    {{- end }}

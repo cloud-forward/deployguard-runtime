@@ -1,4 +1,3 @@
-# config/rules.yaml
 tetragon:
   sa_token_paths:
     - "/var/run/secrets/kubernetes.io/serviceaccount"

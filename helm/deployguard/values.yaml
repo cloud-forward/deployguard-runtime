@@ -1,0 +1,59 @@
+# Docker 이미지 설정
+image:
+  repository: deployguard/scanner
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# 스캐너 설정
+scanner:
+  # 스캔 주기 (초)
+  interval: 120
+  # 출력 디렉토리
+  outputDir: "/tmp/evidence"
+
+# 데이터 소스 설정
+dataSources:
+  # Tetragon 설정
+  tetragon:
+    enabled: true
+    namespace: "kube-system"
+    podLabelSelector: "app.kubernetes.io/name=tetragon"
+    containerName: "export-stdout"
+  
+  # Audit 로그 설정
+  audit:
+    enabled: true
+    # 노드의 audit 로그 경로
+    logPath: "/var/log/kubernetes/audit/audit.log"
+    # 마스터 노드에만 배포할지 여부
+    masterOnly: false
+
+# 리소스 제한
+resources:
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+  requests:
+    memory: "256Mi"
+    cpu: "100m"
+
+# ServiceAccount
+serviceAccount:
+  create: true
+  name: ""  # 비워두면 자동 생성
+
+# 노드 선택자 (audit 로그가 있는 노드)
+nodeSelector: {}
+  # node-role.kubernetes.io/control-plane: ""
+
+# 보안 컨텍스트
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 2000
+
+# 설정 오버라이드
+config:
+  # rules.yaml 내용을 오버라이드하려면 여기에 작성
+  override: false
+  rules: {}
