@@ -1,0 +1,174 @@
+# suppression/suppression_policy.yaml
+#
+# Self-noise suppression 정책.
+#
+# 설계 원칙:
+#   - 코드 if/else 하드코딩 없음. 이 파일만 수정하면 규칙 추가/삭제 가능.
+#   - pod_name / service_account 문자열 하드코딩 금지.
+#     대신 workload_labels / annotations / pod_uid / env 기반 식별.
+#   - 새로운 internal collector / observability agent 추가 시
+#     rules 블록에 항목만 추가하면 됨.
+#
+# rule 스키마:
+#   id         : 규칙 고유 ID (로그/카운터 키로 사용)
+#   description: 사람이 읽을 설명
+#   enabled    : true | false  (false면 매칭 안 함)
+#   reason     : suppressed_reason 필드에 기록되는 사유
+#   match      : 매칭 조건 (모두 AND)
+#     namespace        : 정규식
+#     pod_name         : 정규식
+#     pod_uid          : 정규식 (정확한 UID 매칭)
+#     service_account  : 정규식
+#     workload_name    : 정규식
+#     workload_kind    : 정규식
+#     node_name        : 정규식
+#     workload_labels  : dict — 모든 key/value가 일치해야 함
+#     workload_annotations: dict — 모든 key/value가 일치해야 함
+#     fact_type        : 정규식 (예: "sa_token_access|imds_access")
+#     category         : 정규식 (예: "file|network")
+#     binary           : 정규식 (attributes.binary 또는 raw_excerpt.binary)
+#     arguments        : 정규식 (raw_excerpt.arguments)
+#     target           : 정규식
+#   action:
+#     drop             : true | false   (outbound EvidenceFact 전송 차단)
+#     log_level        : debug | info | warn  (suppression 로그 레벨)
+#     emit_metric      : true | false   (내부 진단 카운터 유지 여부)
+
+
+rules:
+
+  # ────────────────────────────────────────────────────────────────────
+  # 1. DeployGuard 자기 자신 (label 기반 식별)
+  #    POD_NAME/SERVICE_ACCOUNT 하드코딩 없음.
+  #    DaemonSet에 deployguard.io/internal-collector=true 라벨 필수.
+  # ────────────────────────────────────────────────────────────────────
+  - id: self_suppress_deployguard
+    description: "DeployGuard runtime scanner 자기 자신의 이벤트 억제"
+    enabled: true
+    reason: "self_collector_noise: deployguard.io/internal-collector=true"
+    match:
+      workload_labels:
+        deployguard.io/internal-collector: "true"
+    action:
+      drop: true
+      log_level: debug
+      emit_metric: true
+
+  # ────────────────────────────────────────────────────────────────────
+  # 2. 모든 internal collector 공통 (재사용 가능 범용 규칙)
+  #    Tetragon, Falco, Cilium Agent 등 보안 에이전트 공통 라벨.
+  # ────────────────────────────────────────────────────────────────────
+  - id: self_suppress_internal_collector
+    description: "internal-collector 라벨이 붙은 모든 에이전트 억제"
+    enabled: true
+    reason: "self_collector_noise: internal-collector label matched"
+    match:
+      workload_labels:
+        deployguard.io/internal-collector: "true"
+      # fact_type 필터 없음 → 해당 workload의 모든 fact 억제
+    action:
+      drop: true
+      log_level: debug
+      emit_metric: true
+
+  # ────────────────────────────────────────────────────────────────────
+  # 3. Tetragon 에이전트 (kube-system, label 기반)
+  #    Tetragon이 자기 자신의 SA token 접근 이벤트를 생성하는 경우
+  # ────────────────────────────────────────────────────────────────────
+  - id: self_suppress_tetragon_agent
+    description: "Tetragon 에이전트 자체 이벤트 억제"
+    enabled: true
+    reason: "self_collector_noise: tetragon agent (app.kubernetes.io/name=tetragon)"
+    match:
+      workload_labels:
+        app.kubernetes.io/name: "tetragon"
+      fact_type: "sa_token_access|imds_access|host_sensitive_path_access"
+    action:
+      drop: true
+      log_level: debug
+      emit_metric: true
+
+  # ────────────────────────────────────────────────────────────────────
+  # 4. Cilium Agent (네트워크 연결 노이즈)
+  # ────────────────────────────────────────────────────────────────────
+  - id: self_suppress_cilium_agent
+    description: "Cilium agent 네트워크 이벤트 억제"
+    enabled: true
+    reason: "self_collector_noise: cilium agent"
+    match:
+      workload_labels:
+        k8s-app: "cilium"
+      category: "network"
+    action:
+      drop: true
+      log_level: debug
+      emit_metric: true
+
+  # ────────────────────────────────────────────────────────────────────
+  # 5. 관찰성 에이전트 공통 (Prometheus, Fluentd, Datadog 등)
+  #    observability.io/agent=true 라벨 규약
+  # ────────────────────────────────────────────────────────────────────
+  - id: self_suppress_observability_agent
+    description: "관찰성 에이전트 라벨이 있는 워크로드의 파일/네트워크 노이즈 억제"
+    enabled: true
+    reason: "self_collector_noise: observability agent label matched"
+    match:
+      workload_labels:
+        observability.io/agent: "true"
+      category: "file|network"
+      fact_type: "file_access|network_connect|kube_api_access"
+    action:
+      drop: true
+      log_level: debug
+      emit_metric: true
+
+  # ────────────────────────────────────────────────────────────────────
+  # 6. 특정 namespace 전체 억제 (system_namespaces와 별개 레이어)
+  #    system_namespaces는 normalizer에서 걸러지지만,
+  #    이 규칙은 "suppressed" 로그/카운터를 남기는 것이 목적.
+  # ────────────────────────────────────────────────────────────────────
+  - id: suppress_monitoring_namespace
+    description: "monitoring 네임스페이스의 저신뢰 이벤트 억제 (Prometheus 등)"
+    enabled: true
+    reason: "namespace_policy: monitoring namespace low-fidelity suppression"
+    match:
+      namespace: "^monitoring$"
+      fact_type: "file_access|network_connect|k8s_api_call"
+    action:
+      drop: true
+      log_level: debug
+      emit_metric: true
+
+  # ────────────────────────────────────────────────────────────────────
+  # 7. kubectl / curl 정상 운영 패턴 (arguments regex 기반)
+  #    운영팀이 정기적으로 실행하는 known-good 명령 패턴 억제
+  # ────────────────────────────────────────────────────────────────────
+  - id: suppress_known_ops_curl_healthcheck
+    description: "헬스체크 목적의 curl 억제 (내부 엔드포인트만)"
+    enabled: false   # 기본 비활성 — 운영팀이 활성화 결정
+    reason: "ops_policy: known healthcheck curl pattern"
+    match:
+      binary: ".*/curl$"
+      arguments: "^http://(localhost|127\\.0\\.0\\.1|.*\\.svc\\.cluster\\.local)"
+      fact_type: "suspicious_process"
+    action:
+      drop: true
+      log_level: info
+      emit_metric: true
+
+  # ────────────────────────────────────────────────────────────────────
+  # 8. 예시: 향후 추가할 수 있는 Falco 에이전트
+  #    (현재 비활성 — 배포 시 enabled: true로 변경)
+  # ────────────────────────────────────────────────────────────────────
+  - id: self_suppress_falco_agent
+    description: "Falco security agent 억제 (비활성)"
+    enabled: false
+    reason: "self_collector_noise: falco agent"
+    match:
+      workload_labels:
+        app: "falco"
+      fact_type: "sa_token_access|host_sensitive_path_access"
+    action:
+      drop: true
+      log_level: debug
+      emit_metric: true
