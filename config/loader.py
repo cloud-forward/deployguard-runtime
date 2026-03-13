@@ -1,3 +1,12 @@
+"""
+config/loader.py
+
+설정 로더.
+변경 사항:
+  - get_audit_rules() 유지 (하위 호환)
+  - fact_registry 로드 경로 추가
+"""
+
 from pathlib import Path
 import yaml
 
@@ -14,7 +23,6 @@ def load_config() -> dict:
 
 
 def reload_config() -> dict:
-    """강제 리로드 (테스트 또는 런타임 규칙 갱신용)"""
     global _config
     _config = None
     return load_config()
@@ -33,11 +41,8 @@ def get_system_users() -> set:
 
 
 def get_audit_rules() -> list[dict]:
-    """rules.yaml의 audit_rules 섹션 반환 — mapper가 동적으로 참조"""
     return load_config().get("audit_rules", [])
 
-
-# ── Tetragon 세부 규칙 편의 함수 ─────────────────────────────────────
 
 def get_sa_token_paths() -> list[str]:
     return get_tetragon_rules().get("sa_token_paths", [])
