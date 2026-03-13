@@ -25,6 +25,7 @@ COPY normalizer/ normalizer/
 COPY fact_builder/ fact_builder/
 COPY forwarder/ forwarder/
 COPY registry/ registry/
+COPY suppression/ suppression/
 COPY policies/ policies/
 
 RUN useradd -u 1000 -m scanner
