@@ -23,15 +23,6 @@ _DEFAULT_CANDIDATES = [
 
 
 class SuppressionMatcher:
-    """
-    YAML 정책 기반 suppression 매처.
-
-    특징
-      - 정책 파일은 suppression_policy.yaml에서 로드
-      - self fact로 판단되면 scanner identity labels/annotations를 자동 주입
-      - pod rollout 후 이전 Pod 이벤트도 stable identity 기준으로 suppress 가능
-    """
-
     def __init__(self, policy_path: Optional[Path] = None) -> None:
         self._rules: list[SuppressionRule] = []
         self._metrics: dict[str, SuppressionMetric] = {}
@@ -106,14 +97,6 @@ class SuppressionMatcher:
         workload_labels: Optional[dict[str, str]] = None,
         workload_annotations: Optional[dict[str, str]] = None,
     ) -> SuppressionResult:
-        """
-        EvidenceFact를 규칙에 순서대로 매칭한다.
-        first-match 방식.
-
-        workload_labels / workload_annotations:
-          actor workload에서 수집한 메타데이터.
-          self fact면 현재 scanner identity의 labels/annotations를 자동 merge한다.
-        """
         labels = dict(workload_labels or {})
         annotations = dict(workload_annotations or {})
 
