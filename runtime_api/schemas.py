@@ -94,17 +94,18 @@ class RuntimeSignal(BaseModel):
 
 class ImageExposure(BaseModel):
     """
-    image_ref 기준 SBOM/CVE join 결과 placeholder.
-    runtime_api가 external SBOM API에서 조회하여 병치.
-    scanner가 직접 판정하지 않는다.
+    image_ref 기준 CVE/exposure join 결과.
+    image scanner가 S3에 저장한 summary를 runtime_api가 읽어 병치.
     """
-    image_ref:        str
+    image_ref:          str
+    image_digest:       str = ""
     critical_cve_count: int = 0
     high_cve_count:     int = 0
+    fix_available:      bool = False
+    poc_exists:         bool = False
     sbom_available:     bool = False
-    sbom_source:        Optional[str] = None   # "grype" | "trivy" | None
+    sbom_source:        Optional[str] = None   # "trivy" | None
     last_scanned_at:    Optional[datetime] = None
-    # 실제 CVE 목록은 detail endpoint에서만 제공
     sample_cves:        list[str] = Field(default_factory=list)
 
 
