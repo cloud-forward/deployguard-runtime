@@ -46,14 +46,13 @@ jobs:
           echo "scanner_image_uri=${SCANNER_IMAGE_URI}" >> $GITHUB_OUTPUT
           echo "api_image_uri=${API_IMAGE_URI}" >> $GITHUB_OUTPUT
 
-      # scanner
       - name: Build scanner image
         run: |
           docker build \
             -t ${{ steps.prep.outputs.scanner_image_uri }}:latest \
             -t ${{ steps.prep.outputs.scanner_image_uri }}:sha-${{ steps.prep.outputs.short_sha }} \
             -t ${{ steps.prep.outputs.scanner_image_uri }}:main-${{ steps.prep.outputs.build_time }} \
-            .
+            -f Dockerfile .
 
       - name: Push scanner image
         run: |
@@ -61,14 +60,13 @@ jobs:
           docker push ${{ steps.prep.outputs.scanner_image_uri }}:sha-${{ steps.prep.outputs.short_sha }}
           docker push ${{ steps.prep.outputs.scanner_image_uri }}:main-${{ steps.prep.outputs.build_time }}
 
-      # runtime api
       - name: Build runtime api image
         run: |
           docker build \
             -t ${{ steps.prep.outputs.api_image_uri }}:latest \
             -t ${{ steps.prep.outputs.api_image_uri }}:sha-${{ steps.prep.outputs.short_sha }} \
             -t ${{ steps.prep.outputs.api_image_uri }}:main-${{ steps.prep.outputs.build_time }} \
-            -f runtime-api/Dockerfile ./runtime-api
+            -f runtime_api/Dockerfile ./runtime_api
 
       - name: Push runtime api image
         run: |
