@@ -31,13 +31,27 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Prepare image tags
+        id: prep
+        run: |
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          BUILD_TIME=$(TZ=Asia/Seoul date +'%Y%m%d-%H%M')
+          IMAGE_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}
+
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "build_time=${BUILD_TIME}" >> $GITHUB_OUTPUT
+          echo "image_uri=${IMAGE_URI}" >> $GITHUB_OUTPUT
+
       - name: Build Docker image
         run: |
-          IMAGE_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}
-          docker build -t ${IMAGE_URI}:${GITHUB_SHA} -t ${IMAGE_URI}:latest .
+          docker build \
+            -t ${{ steps.prep.outputs.image_uri }}:latest \
+            -t ${{ steps.prep.outputs.image_uri }}:sha-${{ steps.prep.outputs.short_sha }} \
+            -t ${{ steps.prep.outputs.image_uri }}:main-${{ steps.prep.outputs.build_time }} \
+            .
 
       - name: Push Docker image
         run: |
-          IMAGE_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}
-          docker push ${IMAGE_URI}:${GITHUB_SHA}
-          docker push ${IMAGE_URI}:latest
+          docker push ${{ steps.prep.outputs.image_uri }}:latest
+          docker push ${{ steps.prep.outputs.image_uri }}:sha-${{ steps.prep.outputs.short_sha }}
+          docker push ${{ steps.prep.outputs.image_uri }}:main-${{ steps.prep.outputs.build_time }}
