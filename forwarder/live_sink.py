@@ -1,18 +1,17 @@
 """
 forwarder/live_sink.py
 
-대시보드용 live payload 전송.
-기존 forwarder/forward.py 의 직렬화·출력 로직을 이전.
+대시보드용 live payload 전송. http-post가 기본 모드.
 
 지원 모드 (FORWARD_MODE 환경변수):
-  - stdout      : JSONL stdout 출력
-  - file-jsonl  : OUTPUT_DIR/facts_<timestamp>.jsonl 저장 (기본값)
-  - http-post   : FORWARD_URL HTTP POST
+  - http-post   : FORWARD_URL HTTP POST (기본값)
+  - stdout      : JSONL stdout 출력 (로컬 디버그)
+  - file-jsonl  : OUTPUT_DIR/facts_<timestamp>.jsonl 저장
 
 원칙:
-  - 모든 EvidenceFact를 받는다 (DB 저장 여부와 무관)
+  - 모든 EvidenceFact를 받는다 (suppression 통과한 것만 도달)
   - outbound payload에 raw 전체 원문 포함 금지
-  - DB 미저장 fact도 반드시 이 경로로 내보낸다
+  - FORWARD_URL 미설정 시 stdout fallback + 경고
 """
 
 from __future__ import annotations
@@ -29,9 +28,14 @@ from schemas.evidence_fact import EvidenceFact
 
 log = logging.getLogger(__name__)
 
-FORWARD_MODE = os.environ.get("FORWARD_MODE", "file-jsonl").lower()
-FORWARD_URL  = os.environ.get("FORWARD_URL", "")
+# http-post가 기본값 (runtime_api 중심 구조)
+FORWARD_MODE = os.environ.get("FORWARD_MODE", "http-post").lower()
+FORWARD_URL  = os.environ.get("FORWARD_URL", "")   # e.g. http://runtime-api:8080/runtime/facts
 OUTPUT_DIR   = Path(os.environ.get("OUTPUT_DIR", "/tmp/evidence"))
+
+# HTTP 전송 설정
+_HTTP_TIMEOUT  = int(os.environ.get("FORWARD_HTTP_TIMEOUT", "10"))
+_HTTP_BATCH_SIZE = int(os.environ.get("FORWARD_HTTP_BATCH_SIZE", "100"))
 
 
 # ── 직렬화 ────────────────────────────────────────────────────────────
@@ -60,10 +64,11 @@ def send(facts: Sequence[EvidenceFact]) -> None:
 
     if FORWARD_MODE == "stdout":
         _send_stdout(facts)
-    elif FORWARD_MODE == "http-post":
-        _send_http(facts)
-    else:
+    elif FORWARD_MODE == "file-jsonl":
         _send_file(facts)
+    else:
+        # 기본: http-post
+        _send_http(facts)
 
 
 # ── 내부 전송 구현 ────────────────────────────────────────────────────
@@ -90,31 +95,49 @@ def _send_file(facts: Sequence[EvidenceFact]) -> None:
 
 
 def _send_http(facts: Sequence[EvidenceFact]) -> None:
-    """HTTP POST. FORWARD_URL 미설정 시 file-jsonl fallback."""
+    """
+    HTTP POST → runtime_api /runtime/facts.
+    FORWARD_URL 미설정 시 stdout fallback.
+    _HTTP_BATCH_SIZE 단위로 분할 전송.
+    """
     if not FORWARD_URL:
-        log.warning("FORWARD_URL 미설정 — file-jsonl fallback")
-        _send_file(facts)
+        log.warning(
+            "FORWARD_URL 미설정 — stdout fallback. "
+            "운영 환경에서는 FORWARD_URL=http://runtime-api:8080/runtime/facts 설정 필요"
+        )
+        _send_stdout(facts)
         return
 
-    try:
-        payload = json.dumps(
-            [serialize(f) for f in facts],
-            ensure_ascii=False,
-            default=str,
-        ).encode("utf-8")
+    serialized = [serialize(f) for f in facts]
+    total      = len(serialized)
+    sent       = 0
 
-        req = urllib.request.Request(
-            FORWARD_URL,
-            data=payload,
-            method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "X-Scanner-Source": "deployguard-runtime-scanner",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            log.info("live_sink HTTP 전송 성공: %s (%d건)", resp.status, len(facts))
+    for i in range(0, total, _HTTP_BATCH_SIZE):
+        batch = serialized[i : i + _HTTP_BATCH_SIZE]
+        try:
+            payload = json.dumps(batch, ensure_ascii=False, default=str).encode("utf-8")
+            req = urllib.request.Request(
+                FORWARD_URL,
+                data=payload,
+                method="POST",
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Scanner-Source": "deployguard-runtime-scanner",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT) as resp:
+                log.info(
+                    "live_sink HTTP 전송 성공: status=%s batch=%d/%d",
+                    resp.status, i // _HTTP_BATCH_SIZE + 1,
+                    (total + _HTTP_BATCH_SIZE - 1) // _HTTP_BATCH_SIZE,
+                )
+            sent += len(batch)
+        except Exception as e:
+            log.error(
+                "live_sink HTTP 전송 실패 (batch %d): %s — file-jsonl fallback",
+                i // _HTTP_BATCH_SIZE + 1, e,
+            )
+            _send_file(facts[i : i + _HTTP_BATCH_SIZE])  # type: ignore[index]
 
-    except Exception as e:
-        log.error("live_sink HTTP 전송 실패: %s — file-jsonl fallback", e)
-        _send_file(facts)
+    if sent:
+        log.info("live_sink HTTP 전송 완료: %d/%d건", sent, total)
