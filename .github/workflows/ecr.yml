@@ -1,4 +1,4 @@
-name: Build and Push Runtime Scanner
+name: Build and Push Runtime Images
 
 on:
   push:
@@ -12,7 +12,8 @@ permissions:
 env:
   AWS_REGION: ap-northeast-2
   AWS_ACCOUNT_ID: "189060532132"
-  ECR_REPOSITORY: deployguard-runtime-scanner
+  ECR_REPOSITORY_SCANNER: deployguard-runtime-scanner
+  ECR_REPOSITORY_API: deployguard-runtime-api
 
 jobs:
   build-and-push:
@@ -36,22 +37,41 @@ jobs:
         run: |
           SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
           BUILD_TIME=$(TZ=Asia/Seoul date +'%Y%m%d-%H%M')
-          IMAGE_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}
+
+          SCANNER_IMAGE_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY_SCANNER}
+          API_IMAGE_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY_API}
 
           echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
           echo "build_time=${BUILD_TIME}" >> $GITHUB_OUTPUT
-          echo "image_uri=${IMAGE_URI}" >> $GITHUB_OUTPUT
+          echo "scanner_image_uri=${SCANNER_IMAGE_URI}" >> $GITHUB_OUTPUT
+          echo "api_image_uri=${API_IMAGE_URI}" >> $GITHUB_OUTPUT
 
-      - name: Build Docker image
+      # scanner
+      - name: Build scanner image
         run: |
           docker build \
-            -t ${{ steps.prep.outputs.image_uri }}:latest \
-            -t ${{ steps.prep.outputs.image_uri }}:sha-${{ steps.prep.outputs.short_sha }} \
-            -t ${{ steps.prep.outputs.image_uri }}:main-${{ steps.prep.outputs.build_time }} \
+            -t ${{ steps.prep.outputs.scanner_image_uri }}:latest \
+            -t ${{ steps.prep.outputs.scanner_image_uri }}:sha-${{ steps.prep.outputs.short_sha }} \
+            -t ${{ steps.prep.outputs.scanner_image_uri }}:main-${{ steps.prep.outputs.build_time }} \
             .
 
-      - name: Push Docker image
+      - name: Push scanner image
         run: |
-          docker push ${{ steps.prep.outputs.image_uri }}:latest
-          docker push ${{ steps.prep.outputs.image_uri }}:sha-${{ steps.prep.outputs.short_sha }}
-          docker push ${{ steps.prep.outputs.image_uri }}:main-${{ steps.prep.outputs.build_time }}
+          docker push ${{ steps.prep.outputs.scanner_image_uri }}:latest
+          docker push ${{ steps.prep.outputs.scanner_image_uri }}:sha-${{ steps.prep.outputs.short_sha }}
+          docker push ${{ steps.prep.outputs.scanner_image_uri }}:main-${{ steps.prep.outputs.build_time }}
+
+      # runtime api
+      - name: Build runtime api image
+        run: |
+          docker build \
+            -t ${{ steps.prep.outputs.api_image_uri }}:latest \
+            -t ${{ steps.prep.outputs.api_image_uri }}:sha-${{ steps.prep.outputs.short_sha }} \
+            -t ${{ steps.prep.outputs.api_image_uri }}:main-${{ steps.prep.outputs.build_time }} \
+            -f runtime-api/Dockerfile ./runtime-api
+
+      - name: Push runtime api image
+        run: |
+          docker push ${{ steps.prep.outputs.api_image_uri }}:latest
+          docker push ${{ steps.prep.outputs.api_image_uri }}:sha-${{ steps.prep.outputs.short_sha }}
+          docker push ${{ steps.prep.outputs.api_image_uri }}:main-${{ steps.prep.outputs.build_time }}
