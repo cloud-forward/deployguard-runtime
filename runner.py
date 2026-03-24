@@ -9,6 +9,7 @@ runner.py — DeployGuard Runtime Scanner
   - Tetragon: DaemonSet 전제, NODE_NAME 기반 노드 로컬 수집
   - _find_tetragon_pods(): --field-selector를 -o 앞에 위치, 2개 이상 pod 경고
   - Audit: 구조 유지, DB 저장은 추후
+
 """
 
 import time
