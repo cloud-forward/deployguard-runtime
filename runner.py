@@ -2,15 +2,13 @@
 runner.py — DeployGuard Runtime Scanner
 
 파이프라인:
-  collect → normalize → enrich → dedup
-  → build_evidence_fact → [suppress] → forward
+  collect → normalize → enrich → build_evidence_fact → suppress → dispatch
 
-suppression 단계:
-  - YAML 정책 기반 (코드 if/else 하드코딩 없음)
-  - pod_name/service_account 문자열 하드코딩 없음
-  - workload_labels / pod_uid / annotation 기반 식별
-  - suppressed fact는 drop되지만 내부 카운터/로그는 유지
-  - outbound payload만 차단
+변경 사항:
+  - forward() → forwarder.dispatcher.dispatch()
+  - Tetragon: DaemonSet 전제, NODE_NAME 기반 노드 로컬 수집
+  - _find_tetragon_pods(): --field-selector를 -o 앞에 위치, 2개 이상 pod 경고
+  - Audit: 구조 유지, DB 저장은 추후
 """
 
 import time
@@ -23,18 +21,18 @@ import signal
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).parent.parent))
+sys.path.append(str(Path(__file__).parent))
 
-from normalizer.tetragon   import normalize_with_excerpt as tetragon_normalize
-from normalizer.audit      import normalize_with_excerpt as audit_normalize
-from fact_builder.mapper   import build_evidence_fact
-from fact_builder.enricher import (
+from normalizer.tetragon       import normalize_with_excerpt as tetragon_normalize
+from normalizer.audit          import normalize_with_excerpt as audit_normalize
+from fact_builder.mapper       import build_evidence_fact
+from fact_builder.enricher     import (
     enrich, build_pod_meta_map, build_owner_map,
     get_workload_labels, get_workload_annotations,
 )
-from forwarder.forwarder   import forward
-from config.loader         import get_system_namespaces
-from suppression.matcher   import get_matcher, reload_matcher
+from forwarder.dispatcher      import dispatch
+from config.loader             import get_system_namespaces
+from suppression.matcher       import get_matcher, reload_matcher
 from suppression.self_identity import get_identity
 
 logging.basicConfig(
@@ -44,7 +42,6 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-
 # ── 환경변수 ──────────────────────────────────────────────────────────
 CLUSTER_ID       = os.environ.get("CLUSTER_ID", "")
 SCANNER_VERSION  = os.environ.get("SCANNER_VERSION", "unknown")
@@ -53,14 +50,19 @@ OUTPUT_DIR       = Path(os.environ.get("OUTPUT_DIR", "/tmp/evidence"))
 DEBUG            = os.environ.get("DEBUG", "false").lower() == "true"
 SAVE_RAW         = os.environ.get("SAVE_RAW", "false").lower() == "true" or DEBUG
 
-FORWARD_MODE     = os.environ.get("FORWARD_MODE", "file-jsonl")
-FORWARD_URL      = os.environ.get("FORWARD_URL", "")
-
 TETRAGON_ENABLED   = os.environ.get("TETRAGON_ENABLED", "true").lower() == "true"
 TETRAGON_NAMESPACE = os.environ.get("TETRAGON_NAMESPACE", "kube-system")
 TETRAGON_SELECTOR  = os.environ.get("TETRAGON_SELECTOR",
                                      "app.kubernetes.io/name=tetragon")
 TETRAGON_CONTAINER = os.environ.get("TETRAGON_CONTAINER", "export-stdout")
+
+# DaemonSet: Pod spec에서 fieldRef로 주입
+#   env:
+#   - name: NODE_NAME
+#     valueFrom:
+#       fieldRef:
+#         fieldPath: spec.nodeName
+NODE_NAME = os.environ.get("NODE_NAME", "")
 
 AUDIT_ENABLED    = os.environ.get("AUDIT_ENABLED", "true").lower() == "true"
 AUDIT_LOG_PATH   = os.environ.get("AUDIT_LOG_PATH",
@@ -73,53 +75,83 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # ── SIGHUP: 정책 핫 리로드 ────────────────────────────────────────────
 
 def _handle_sighup(signum, frame) -> None:
-    log.info("SIGHUP 수신 — suppression 정책 및 registry 리로드")
+    log.info("SIGHUP 수신 — suppression 정책 리로드")
     reload_matcher()
 
 
 signal.signal(signal.SIGHUP, _handle_sighup)
 
 
-# ── 수집 헬퍼 ────────────────────────────────────────────────────────
+# ── 수집 헬퍼 ─────────────────────────────────────────────────────────
 
 def _since_str() -> str:
     return f"{max(1, (SCAN_INTERVAL // 60) + 1)}m"
 
 
-def collect_tetragon_events() -> list:
+def _find_tetragon_pods() -> list[str]:
+    """
+    DaemonSet 전제:
+      NODE_NAME 설정 → fieldSelector로 해당 노드 Pod만 반환
+      NODE_NAME 미설정 → 전체 Pod 반환 + 경고 (fallback)
+
+    --field-selector는 반드시 -o 옵션보다 앞에 위치.
+    pod가 2개 이상이면 경고 로그 출력.
+    """
     try:
-        pods_result = subprocess.run(
-            ["kubectl", "get", "pods",
-             "-n", TETRAGON_NAMESPACE, "-l", TETRAGON_SELECTOR,
-             "-o", "jsonpath={.items[*].metadata.name}"],
+        cmd = [
+            "kubectl", "get", "pods",
+            "-n", TETRAGON_NAMESPACE,
+            "-l", TETRAGON_SELECTOR,
+        ]
+        if NODE_NAME:
+            cmd.append(f"--field-selector=spec.nodeName={NODE_NAME}")
+        else:
+            log.warning(
+                "NODE_NAME 환경변수 미설정 — 모든 Tetragon Pod에서 수집 "
+                "(DaemonSet 환경에서는 spec.nodeName fieldRef 주입 필요)"
+            )
+        cmd += ["-o", "jsonpath={.items[*].metadata.name}"]
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        pods = [p for p in result.stdout.strip().split() if "operator" not in p]
+
+        if len(pods) > 1:
+            log.warning("Tetragon pod가 여러 개 발견됨: %s", pods)
+
+        return pods
+
+    except Exception as e:
+        log.error("Tetragon Pod 목록 조회 실패: %s", e)
+        return []
+
+
+def collect_tetragon_events() -> list:
+    pod_names = _find_tetragon_pods()
+    if not pod_names:
+        log.warning("Tetragon Pod 없음 (ns=%s, node=%s)",
+                    TETRAGON_NAMESPACE, NODE_NAME or "*")
+        return []
+
+    log.debug("Tetragon 수집 대상 Pod: %s", pod_names)
+    events: list = []
+    for pod_name in pod_names:
+        result = subprocess.run(
+            ["kubectl", "logs",
+             "-n", TETRAGON_NAMESPACE,
+             pod_name, "-c", TETRAGON_CONTAINER,
+             f"--since={_since_str()}"],
             capture_output=True, text=True,
         )
-        pod_names = [p for p in pods_result.stdout.strip().split()
-                     if "operator" not in p]
-        if not pod_names:
-            log.warning(f"Tetragon Pod 없음 (ns={TETRAGON_NAMESPACE})")
-            return []
-
-        events: list = []
-        for pod_name in pod_names:
-            result = subprocess.run(
-                ["kubectl", "logs", "-n", TETRAGON_NAMESPACE,
-                 pod_name, "-c", TETRAGON_CONTAINER,
-                 f"--since={_since_str()}"],
-                capture_output=True, text=True,
-            )
-            if result.returncode != 0:
-                continue
-            for line in result.stdout.strip().splitlines():
-                if line:
-                    try:
-                        events.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        pass
-        return events
-    except Exception as e:
-        log.error(f"Tetragon 수집 실패: {e}")
-        return []
+        if result.returncode != 0:
+            log.warning("Tetragon 로그 조회 실패: pod=%s", pod_name)
+            continue
+        for line in result.stdout.strip().splitlines():
+            if line:
+                try:
+                    events.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
+    return events
 
 
 def collect_audit_events() -> list:
@@ -139,7 +171,7 @@ def collect_audit_events() -> list:
                     pass
         return events
     except Exception as e:
-        log.error(f"Audit 수집 실패: {e}")
+        log.error("Audit 수집 실패: %s", e)
         return []
 
 
@@ -154,52 +186,37 @@ def get_pod_meta() -> tuple[dict, dict]:
         data = json.loads(result.stdout)
         return build_pod_meta_map(data), build_owner_map(data)
     except Exception as e:
-        log.error(f"Pod 메타 조회 실패: {e}")
+        log.error("Pod 메타 조회 실패: %s", e)
         return {}, {}
 
 
-# ── suppression 적용 ──────────────────────────────────────────────────
+# ── suppression ───────────────────────────────────────────────────────
 
 def _apply_suppression(fact, pod_meta_map: dict) -> bool:
-    """
-    True  → suppress (outbound 차단, 로그/카운터 유지)
-    False → 통과
-
-    workload_labels / annotations는 pod_meta_map에서 조회.
-    pod_uid 기반 self-identity 체크는 matcher 내부 규칙에서 처리.
-    """
+    """True → suppress (outbound 차단, 내부 카운터 유지)"""
     matcher = get_matcher()
 
     labels = get_workload_labels(
-        pod_meta_map,
-        fact.actor.namespace,
-        fact.actor.pod_name,
+        pod_meta_map, fact.actor.namespace, fact.actor.pod_name,
     )
     annotations = get_workload_annotations(
-        pod_meta_map,
-        fact.actor.namespace,
-        fact.actor.pod_name,
+        pod_meta_map, fact.actor.namespace, fact.actor.pod_name,
     )
 
-    # scanner 자기 자신이면 labels에 self-identity 라벨을 강제 주입
-    # (kubectl 조회가 실패했을 때 env 기반 fallback)
     identity = get_identity()
     if identity.is_self(fact.actor.pod_uid, fact.actor.pod_name):
         labels = {**labels, **identity.labels}
-        # deployguard.io/internal-collector 라벨이 없어도 자기 자신이면 주입
         if "deployguard.io/internal-collector" not in labels:
             labels["deployguard.io/internal-collector"] = "true"
 
     result = matcher.evaluate(fact, labels, annotations)
-
     if result.suppressed:
         log.debug(
-            f"[suppressed] rule={result.rule_id} "
-            f"fact={fact.fact_type} pod={fact.actor.pod_name} "
-            f"reason={result.suppressed_reason}"
+            "[suppressed] rule=%s fact=%s pod=%s reason=%s",
+            result.rule_id, fact.fact_type,
+            fact.actor.pod_name, result.suppressed_reason,
         )
         return True
-
     return False
 
 
@@ -207,7 +224,7 @@ def _apply_suppression(fact, pod_meta_map: dict) -> bool:
 
 def run() -> None:
     if not CLUSTER_ID:
-        log.warning("CLUSTER_ID 미설정")
+        log.warning("CLUSTER_ID 미설정 — DB 저장 skip, live sink는 정상 동작")
 
     system_namespaces = get_system_namespaces()
     pod_meta_map, owner_map = get_pod_meta()
@@ -215,21 +232,23 @@ def run() -> None:
     tetragon_raws = collect_tetragon_events() if TETRAGON_ENABLED else []
     audit_raws    = collect_audit_events()    if AUDIT_ENABLED    else []
 
-    log.info(f"수집: Tetragon={len(tetragon_raws)}, Audit={len(audit_raws)}")
+    log.info("수집: Tetragon=%d, Audit=%d", len(tetragon_raws), len(audit_raws))
 
     if SAVE_RAW and (tetragon_raws or audit_raws):
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         try:
             with open(OUTPUT_DIR / f"raw_{ts}.json", "w") as f:
-                json.dump({"tetragon": tetragon_raws, "audit": audit_raws},
-                          f, indent=2, ensure_ascii=False)
+                json.dump(
+                    {"tetragon": tetragon_raws, "audit": audit_raws},
+                    f, indent=2, ensure_ascii=False,
+                )
         except Exception as e:
-            log.error(f"Raw 저장 실패: {e}")
+            log.error("Raw 저장 실패: %s", e)
 
     facts:      list = []
     suppressed: int  = 0
 
-    # ── Tetragon 처리 ─────────────────────────────────────────────────
+    # ── Tetragon ──────────────────────────────────────────────────────
     seen_tetragon: set = set()
     for raw in tetragon_raws:
         try:
@@ -258,7 +277,6 @@ def run() -> None:
             if not fact:
                 continue
 
-            # ── suppression 적용 ──────────────────────────────────────
             if _apply_suppression(fact, pod_meta_map):
                 suppressed += 1
                 continue
@@ -266,9 +284,9 @@ def run() -> None:
             facts.append(fact)
 
         except Exception as e:
-            log.error(f"Tetragon 처리 실패: {e}")
+            log.error("Tetragon 처리 실패: %s", e)
 
-    # ── Audit 처리 ────────────────────────────────────────────────────
+    # ── Audit (구조 유지) ─────────────────────────────────────────────
     seen_audit: set = set()
     for raw in audit_raws:
         try:
@@ -276,10 +294,7 @@ def run() -> None:
             if result is None:
                 continue
 
-            if isinstance(result, tuple):
-                event, excerpt = result
-            else:
-                event, excerpt = result, None
+            event, excerpt = result if isinstance(result, tuple) else (result, None)
 
             audit_id = raw.get("auditID")
             if audit_id:
@@ -299,7 +314,6 @@ def run() -> None:
             if not fact:
                 continue
 
-            # ── suppression 적용 ──────────────────────────────────────
             if _apply_suppression(fact, pod_meta_map):
                 suppressed += 1
                 continue
@@ -307,31 +321,31 @@ def run() -> None:
             facts.append(fact)
 
         except Exception as e:
-            log.error(f"Audit 처리 실패: {e}")
+            log.error("Audit 처리 실패: %s", e)
 
     log.info(
-        f"EvidenceFact: 생성={len(facts) + suppressed}  "
-        f"통과={len(facts)}  suppressed={suppressed}"
+        "EvidenceFact: 생성=%d  통과=%d  suppressed=%d",
+        len(facts) + suppressed, len(facts), suppressed,
     )
 
-    # 진단 카운터 로그 (suppress된 규칙별 집계)
     for metric in get_matcher().metrics_snapshot():
         if metric["match_count"] > 0:
             log.debug(
-                f"[suppression-metric] rule={metric['rule_id']} "
-                f"count={metric['match_count']} "
-                f"last={metric['last_matched']}"
+                "[suppression-metric] rule=%s count=%d last=%s",
+                metric["rule_id"], metric["match_count"], metric["last_matched"],
             )
 
-    forward(facts)
+    dispatch(facts)
 
 
 if __name__ == "__main__":
-    log.info(f"DeployGuard Scanner 시작 (interval={SCAN_INTERVAL}s, "
-             f"cluster={CLUSTER_ID}, forward={FORWARD_MODE})")
+    log.info(
+        "DeployGuard Scanner 시작 (interval=%ds, cluster=%s, node=%s)",
+        SCAN_INTERVAL, CLUSTER_ID or "(미설정)", NODE_NAME or "*",
+    )
     while True:
         try:
             run()
         except Exception as e:
-            log.error(f"run() 예외: {e}")
+            log.error("run() 예외: %s", e)
         time.sleep(SCAN_INTERVAL)

@@ -19,14 +19,14 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY runner.py .
-COPY config/ config/
-COPY schemas/ schemas/
+COPY config/     config/
+COPY schemas/    schemas/
 COPY normalizer/ normalizer/
 COPY fact_builder/ fact_builder/
-COPY forwarder/ forwarder/
-COPY registry/ registry/
+COPY forwarder/  forwarder/
+COPY registry/   registry/
 COPY suppression/ suppression/
-COPY policies/ policies/
+COPY policies/   policies/
 
 RUN useradd -u 1000 -m scanner
 USER scanner
