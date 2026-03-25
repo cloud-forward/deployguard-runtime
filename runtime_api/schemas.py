@@ -175,6 +175,8 @@ class WorkloadSummary(BaseModel):
 
     # 대시보드 노출 자격
     dashboard_eligible: bool = False
+    dashboard_category: Optional[str] = None
+    dashboard_reason:   Optional[str] = None
 
     # 마지막 업데이트
     last_seen_at:   Optional[datetime]
@@ -232,3 +234,5 @@ class WorkloadDetail(BaseModel):
     evidence_highest_severity: Optional[str] = None
 
     dashboard_eligible: bool = False
+    dashboard_category: Optional[str] = None
+    dashboard_reason:   Optional[str] = None

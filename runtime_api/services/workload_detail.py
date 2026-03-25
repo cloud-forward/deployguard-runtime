@@ -18,9 +18,9 @@ workload list / detail 서비스 레이어.
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime
-from typing import Any, List, Optional
+import os
+from typing import List, Optional
 
 from runtime_api.schemas import (
     EvidenceAggregate,
@@ -39,21 +39,18 @@ log = logging.getLogger(__name__)
 _SEVERITY_ORDER = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 _DETAIL_SIGNAL_LIMIT = int(os.environ.get("DETAIL_SIGNAL_LIMIT", "50"))
 _RELATED_LIMIT = int(os.environ.get("RELATED_SIGNAL_LIMIT", "20"))
-
-# 노이즈로 간주할 네임스페이스 목록 (환경변수로 확장 가능)
-_NOISE_NAMESPACES: set[str] = {
-    "deployguard",
-    "kube-system",
-    "kube-public",
-    "kube-node-lease",
-    "kube-flannel",
-    "cert-manager",
-    "monitoring",
-    "ingress-nginx",
+_MEANINGFUL_FACT_FAMILIES = {
+    "cloud_access",
+    "credential_access",
+    "discovery",
+    "execution",
+    "lateral_movement",
+    "persistence",
+    "privilege_escalation",
+    "exfiltration",
 }
-_extra_noise = os.environ.get("NOISE_NAMESPACES", "")
-if _extra_noise:
-    _NOISE_NAMESPACES.update(n.strip() for n in _extra_noise.split(",") if n.strip())
+
+_NOISE_NAMESPACES: set[str] = {"deployguard"}
 
 
 # ── helpers ──────────────────────────────────────────────────────────────
@@ -119,6 +116,9 @@ def _exposure_to_schema(exp: ImageExposureSummary) -> ImageExposure:
         high_cve_count=exp.high_cve_count,
         fix_available=exp.fix_available,
         poc_exists=exp.poc_exists,
+        sbom_available=True,
+        sbom_source=exp.source,
+        last_scanned_at=exp.scanned_at,
         sample_cves=exp.sample_cves,
     )
 
@@ -190,10 +190,28 @@ def is_unknown_workload(workload_name: str, namespace: str) -> bool:
 
 def is_noise_workload(namespace: str, workload_name: str) -> bool:
     """
-    deployguard/kube-system 등 self-noise 네임스페이스이면 True.
-    운영 워크로드가 아닌 인프라 컴포넌트를 걸러낸다.
+    deployguard namespace면 True.
+    scanner self-noise는 ingest/suppression에서 처리하고,
+    dashboard list는 deployguard noise만 추가 제외한다.
     """
     if namespace in _NOISE_NAMESPACES:
+        return True
+    return False
+
+
+def _has_meaningful_evidence(
+    evidence_count: int,
+    evidence_highest_severity: Optional[str],
+    evidence_scenario_tags: List[str],
+    evidence_fact_families: List[str],
+) -> bool:
+    if evidence_count <= 0:
+        return False
+    if evidence_highest_severity in {"high", "critical"}:
+        return True
+    if evidence_scenario_tags:
+        return True
+    if any(f in _MEANINGFUL_FACT_FAMILIES for f in evidence_fact_families):
         return True
     return False
 
@@ -202,6 +220,10 @@ def is_dashboard_eligible(
     workload_name: str,
     namespace: str,
     image_exposure: List[ImageExposure],
+    evidence_count: int = 0,
+    evidence_highest_severity: Optional[str] = None,
+    evidence_scenario_tags: Optional[List[str]] = None,
+    evidence_fact_families: Optional[List[str]] = None,
 ) -> bool:
     """
     대시보드 목록에 노출할 자격 판별.
@@ -209,15 +231,76 @@ def is_dashboard_eligible(
     조건 (모두 만족해야 True):
       1. unknown workload 아님
       2. noise namespace 아님
-      3. image_exposure가 1개 이상 존재
+      3. image_exposure가 있거나 의미 있는 runtime evidence가 존재
     """
+    evidence_scenario_tags = evidence_scenario_tags or []
+    evidence_fact_families = evidence_fact_families or []
+
     if is_unknown_workload(workload_name, namespace):
         return False
     if is_noise_workload(namespace, workload_name):
         return False
-    if not image_exposure:
+    if image_exposure:
+        return True
+    if not _has_meaningful_evidence(
+        evidence_count,
+        evidence_highest_severity,
+        evidence_scenario_tags,
+        evidence_fact_families,
+    ):
         return False
     return True
+
+
+def build_dashboard_reason(
+    workload_name: str,
+    namespace: str,
+    image_exposure: List[ImageExposure],
+    evidence_count: int = 0,
+    evidence_highest_severity: Optional[str] = None,
+    evidence_scenario_tags: Optional[List[str]] = None,
+    evidence_fact_families: Optional[List[str]] = None,
+) -> tuple[Optional[str], str]:
+    evidence_scenario_tags = evidence_scenario_tags or []
+    evidence_fact_families = evidence_fact_families or []
+
+    if is_unknown_workload(workload_name, namespace):
+        return "excluded_unknown", "excluded: unknown workload or empty namespace"
+    if is_noise_workload(namespace, workload_name):
+        return "excluded_noise", "excluded: deployguard namespace"
+
+    has_exposure = bool(image_exposure)
+    has_meaningful_evidence = _has_meaningful_evidence(
+        evidence_count,
+        evidence_highest_severity,
+        evidence_scenario_tags,
+        evidence_fact_families,
+    )
+
+    if has_exposure and has_meaningful_evidence:
+        return (
+            "hybrid",
+            "image exposure present and runtime evidence met dashboard gate",
+        )
+    if has_exposure:
+        return "exposure", "image exposure present"
+    if has_meaningful_evidence:
+        reason_bits: List[str] = []
+        if evidence_highest_severity in {"high", "critical"}:
+            reason_bits.append(f"severity={evidence_highest_severity}")
+        if evidence_scenario_tags:
+            reason_bits.append("scenario_tags=" + ",".join(evidence_scenario_tags[:3]))
+        elif any(f in _MEANINGFUL_FACT_FAMILIES for f in evidence_fact_families):
+            families = [f for f in evidence_fact_families if f in _MEANINGFUL_FACT_FAMILIES]
+            reason_bits.append("fact_families=" + ",".join(families[:3]))
+        suffix = f" ({'; '.join(reason_bits)})" if reason_bits else ""
+        return "runtime_evidence", f"runtime evidence met dashboard gate{suffix}"
+    if evidence_count > 0:
+        return (
+            "excluded_low_signal",
+            "excluded: evidence-only workload missing high severity, scenario tags, and meaningful fact family",
+        )
+    return "excluded_empty", "excluded: no image exposure or runtime evidence"
 
 
 # ── 정렬 함수 ─────────────────────────────────────────────────────────────
@@ -230,16 +313,18 @@ def sort_workload_summaries(summaries: List[WorkloadSummary]) -> List[WorkloadSu
     "대응 우선순위" 기준 정렬.
 
     우선순위 (내림차순):
-      1. exposure_critical_cve_count
-      2. exposure_high_cve_count
-      3. exposure_has_fix_available
-      4. exposure_has_poc
-      5. evidence_highest_severity
-      6. evidence_latest_at
-      7. evidence_count
+      1. image_exposure 존재 여부
+      2. exposure_critical_cve_count
+      3. exposure_high_cve_count
+      4. exposure_has_fix_available
+      5. exposure_has_poc
+      6. evidence_highest_severity
+      7. evidence_latest_at
+      8. evidence_count
     """
     def _key(s: WorkloadSummary):
         return (
+            int(s.exposure_image_count > 0),
             s.exposure_critical_cve_count,
             s.exposure_high_cve_count,
             int(s.exposure_has_fix_available),
@@ -269,8 +354,25 @@ def build_summary(wid: str, facts: List[FactPayload]) -> WorkloadSummary:
     # aggregate
     exp_agg = aggregate_image_exposure(image_exposure)
     evi_agg = aggregate_runtime_evidence(facts)
+    dashboard_category, dashboard_reason = build_dashboard_reason(
+        workload_name,
+        namespace,
+        image_exposure,
+        evidence_count=evi_agg.count,
+        evidence_highest_severity=evi_agg.highest_severity,
+        evidence_scenario_tags=evi_agg.scenario_tags,
+        evidence_fact_families=evi_agg.fact_families,
+    )
 
-    eligible = is_dashboard_eligible(workload_name, namespace, image_exposure)
+    eligible = is_dashboard_eligible(
+        workload_name,
+        namespace,
+        image_exposure,
+        evidence_count=evi_agg.count,
+        evidence_highest_severity=evi_agg.highest_severity,
+        evidence_scenario_tags=evi_agg.scenario_tags,
+        evidence_fact_families=evi_agg.fact_families,
+    )
 
     return WorkloadSummary(
         workload_id=wid,
@@ -304,6 +406,8 @@ def build_summary(wid: str, facts: List[FactPayload]) -> WorkloadSummary:
         evidence_highest_severity=evi_agg.highest_severity,
 
         dashboard_eligible=eligible,
+        dashboard_category=dashboard_category,
+        dashboard_reason=dashboard_reason,
     )
 
 
@@ -356,7 +460,24 @@ def get_workload_detail(
     # aggregate
     exp_agg = aggregate_image_exposure(image_exposure)
     evi_agg = aggregate_runtime_evidence(facts)
-    eligible = is_dashboard_eligible(workload_name, namespace, image_exposure)
+    dashboard_category, dashboard_reason = build_dashboard_reason(
+        workload_name,
+        namespace,
+        image_exposure,
+        evidence_count=evi_agg.count,
+        evidence_highest_severity=evi_agg.highest_severity,
+        evidence_scenario_tags=evi_agg.scenario_tags,
+        evidence_fact_families=evi_agg.fact_families,
+    )
+    eligible = is_dashboard_eligible(
+        workload_name,
+        namespace,
+        image_exposure,
+        evidence_count=evi_agg.count,
+        evidence_highest_severity=evi_agg.highest_severity,
+        evidence_scenario_tags=evi_agg.scenario_tags,
+        evidence_fact_families=evi_agg.fact_families,
+    )
 
     return WorkloadDetail(
         workload_id=workload_id,
@@ -391,6 +512,8 @@ def get_workload_detail(
         evidence_highest_severity=evi_agg.highest_severity,
 
         dashboard_eligible=eligible,
+        dashboard_category=dashboard_category,
+        dashboard_reason=dashboard_reason,
     )
 
 
