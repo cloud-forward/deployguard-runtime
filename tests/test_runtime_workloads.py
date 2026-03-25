@@ -24,7 +24,9 @@ from runtime_api.schemas import FactPayload
 from runtime_api.services.exposure_query import ImageExposureSummary
 from runtime_api.services.workload_detail import (
     aggregate_runtime_evidence,
-    build_dashboard_reason,
+    build_alert_flags,
+    build_alert_reason,
+    compute_risk_level,
     get_workload_detail,
     is_dashboard_eligible,
     list_workloads,
@@ -100,27 +102,15 @@ def _exposure(
 
 
 def test_unknown_workload_is_excluded() -> None:
-    assert is_dashboard_eligible(
-        "unknown",
-        "prod",
-        [],
-        evidence_count=3,
-        evidence_highest_severity="critical",
-        evidence_scenario_tags=["aws_takeover"],
-        evidence_fact_families=["credential_access"],
-    ) is False
+    assert is_dashboard_eligible("unknown", "prod", []) is False
 
 
 def test_deployguard_namespace_is_excluded() -> None:
-    assert is_dashboard_eligible(
-        "scanner",
-        "deployguard",
-        [],
-        evidence_count=2,
-        evidence_highest_severity="high",
-        evidence_scenario_tags=["collector"],
-        evidence_fact_families=["execution"],
-    ) is False
+    assert is_dashboard_eligible("scanner", "deployguard", []) is False
+
+
+def test_non_noise_workload_without_exposure_or_evidence_is_included() -> None:
+    assert is_dashboard_eligible("api", "prod", []) is True
 
 
 def test_aggregate_runtime_evidence_populates_dashboard_fields() -> None:
@@ -151,62 +141,56 @@ def test_aggregate_runtime_evidence_populates_dashboard_fields() -> None:
     assert agg.scenario_tags == ["tag-a", "tag-b", "tag-c"]
 
 
-def test_evidence_only_workload_requires_meaningful_signal() -> None:
-    assert is_dashboard_eligible(
-        "api",
-        "prod",
-        [],
-        evidence_count=1,
-        evidence_highest_severity="low",
-        evidence_scenario_tags=[],
-        evidence_fact_families=["unknown"],
-    ) is False
-
-    assert is_dashboard_eligible(
-        "api",
-        "prod",
-        [],
-        evidence_count=1,
-        evidence_highest_severity="high",
-        evidence_scenario_tags=[],
-        evidence_fact_families=["unknown"],
-    ) is True
-
-    assert is_dashboard_eligible(
-        "api",
-        "prod",
-        [],
-        evidence_count=1,
-        evidence_highest_severity="low",
-        evidence_scenario_tags=["aws_takeover"],
-        evidence_fact_families=["unknown"],
-    ) is True
-
-    assert is_dashboard_eligible(
-        "api",
-        "prod",
-        [],
-        evidence_count=1,
-        evidence_highest_severity="low",
-        evidence_scenario_tags=[],
-        evidence_fact_families=["credential_access"],
-    ) is True
+def test_risk_level_prefers_image_then_runtime_amplifies() -> None:
+    assert compute_risk_level(1, 0, 1, "low") == "critical"
+    assert compute_risk_level(1, 0, 0, None) == "high"
+    assert compute_risk_level(0, 3, 1, "medium") == "high"
+    assert compute_risk_level(0, 2, 0, None) == "medium"
+    assert compute_risk_level(0, 0, 1, "high") == "high"
+    assert compute_risk_level(0, 0, 1, "low") == "low"
+    assert compute_risk_level(0, 0, 0, None) == "info"
 
 
-def test_exposure_workload_sorts_ahead_of_evidence_only(monkeypatch) -> None:
+def test_alert_flags_and_reason_are_generated() -> None:
+    flags = build_alert_flags(1, 2, True, True, 1, "high")
+    reason = build_alert_reason(1, 2, 1, "high")
+
+    assert flags == [
+        "has_critical_cve",
+        "has_high_cve",
+        "has_fix_available",
+        "has_poc",
+        "has_runtime_activity",
+        "has_runtime_high_signal",
+    ]
+    assert reason == "Critical vulnerabilities actively used at runtime"
+
+
+def test_list_workloads_includes_runtime_only_and_info_workloads_and_sorts_by_risk(monkeypatch) -> None:
     now = datetime.now(timezone.utc)
 
     def _lookup(cluster_id, image_refs, image_digests):
-        if "repo/exposed:1" in image_refs:
+        if "repo/critical:1" in image_refs:
             return [
                 _exposure(
-                    image_ref="repo/exposed:1",
-                    image_digest="sha256:abc",
+                    image_ref="repo/critical:1",
+                    image_digest="sha256:111",
                     critical=2,
-                    high=3,
+                    high=1,
                     fix_available=True,
                     poc_exists=True,
                     scanned_at=now,
+                )
+            ]
+        if "repo/high:1" in image_refs:
+            return [
+                _exposure(
+                    image_ref="repo/high:1",
+                    image_digest="sha256:222",
+                    critical=0,
+                    high=4,
+                    fix_available=True,
+                    scanned_at=now - timedelta(minutes=5),
                 )
             ]
         return []
@@ -217,49 +201,50 @@ def test_exposure_workload_sorts_ahead_of_evidence_only(monkeypatch) -> None:
     store.add(
         [
             _fact(
-                dedup_key="exp-1",
-                workload_name="exposed-app",
-                severity_hint="medium",
-                fact_family="execution",
-                scenario_tags=[],
-                image_ref="repo/exposed:1",
-                image_digest="sha256:abc",
-            ),
-            _fact(
-                dedup_key="evi-1",
-                workload_name="evidence-app",
-                severity_hint="critical",
+                dedup_key="crit-runtime",
+                workload_name="critical-runtime",
+                severity_hint="high",
                 fact_family="credential_access",
                 scenario_tags=["aws_takeover"],
+                image_ref="repo/critical:1",
+                image_digest="sha256:111",
+            ),
+            _fact(
+                dedup_key="high-image",
+                workload_name="high-image-only",
+                severity_hint="low",
+                image_ref="repo/high:1",
+                image_digest="sha256:222",
+            ),
+            _fact(
+                dedup_key="runtime-only",
+                workload_name="runtime-only",
+                severity_hint="high",
+                fact_family="execution",
+            ),
+            _fact(
+                dedup_key="low-runtime",
+                workload_name="low-runtime",
+                severity_hint="low",
+                fact_family="execution",
             ),
         ]
     )
 
     summaries = list_workloads(store=store, eligible_only=True)
 
-    assert [s.workload_name for s in summaries] == ["exposed-app", "evidence-app"]
-    assert summaries[0].dashboard_category == "hybrid"
-    assert summaries[0].exposure_image_count == 1
-    assert summaries[1].dashboard_category == "runtime_evidence"
+    assert [s.workload_name for s in summaries] == [
+        "critical-runtime",
+        "high-image-only",
+        "runtime-only",
+        "low-runtime",
+    ]
+    assert [s.risk_level for s in summaries] == ["critical", "high", "high", "low"]
+    assert summaries[0].alert_reason == "Critical vulnerabilities actively used at runtime"
+    assert "has_poc" in summaries[0].alert_flags
 
 
-def test_dashboard_reason_and_category_are_generated() -> None:
-    category, reason = build_dashboard_reason(
-        "payments",
-        "prod",
-        [],
-        evidence_count=2,
-        evidence_highest_severity="high",
-        evidence_scenario_tags=["aws_takeover"],
-        evidence_fact_families=["credential_access"],
-    )
-
-    assert category == "runtime_evidence"
-    assert "runtime evidence met dashboard gate" in reason
-    assert "severity=high" in reason
-
-
-def test_detail_includes_dashboard_metadata_and_aggregate_fields(monkeypatch) -> None:
+def test_detail_includes_risk_and_alert_fields(monkeypatch) -> None:
     now = datetime.now(timezone.utc)
 
     monkeypatch.setattr(
@@ -294,8 +279,9 @@ def test_detail_includes_dashboard_metadata_and_aggregate_fields(monkeypatch) ->
 
     assert detail is not None
     assert detail.dashboard_eligible is True
-    assert detail.dashboard_category == "hybrid"
-    assert detail.dashboard_reason == "image exposure present and runtime evidence met dashboard gate"
+    assert detail.risk_level == "critical"
+    assert detail.alert_reason == "Critical vulnerabilities actively used at runtime"
+    assert "has_runtime_high_signal" in detail.alert_flags
     assert detail.exposure_critical_cve_count == 1
     assert detail.exposure_high_cve_count == 2
     assert detail.exposure_has_fix_available is True

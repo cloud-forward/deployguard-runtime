@@ -37,18 +37,9 @@ from runtime_api.store import FactStore, get_store
 log = logging.getLogger(__name__)
 
 _SEVERITY_ORDER = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+_RISK_ORDER = {"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1}
 _DETAIL_SIGNAL_LIMIT = int(os.environ.get("DETAIL_SIGNAL_LIMIT", "50"))
 _RELATED_LIMIT = int(os.environ.get("RELATED_SIGNAL_LIMIT", "20"))
-_MEANINGFUL_FACT_FAMILIES = {
-    "cloud_access",
-    "credential_access",
-    "discovery",
-    "execution",
-    "lateral_movement",
-    "persistence",
-    "privilege_escalation",
-    "exfiltration",
-}
 
 _NOISE_NAMESPACES: set[str] = {"deployguard"}
 
@@ -231,76 +222,79 @@ def is_dashboard_eligible(
     조건 (모두 만족해야 True):
       1. unknown workload 아님
       2. noise namespace 아님
-      3. image_exposure가 있거나 의미 있는 runtime evidence가 존재
+      3. 추가 gate 없음. 나머지 workload는 모두 포함
     """
-    evidence_scenario_tags = evidence_scenario_tags or []
-    evidence_fact_families = evidence_fact_families or []
-
     if is_unknown_workload(workload_name, namespace):
         return False
     if is_noise_workload(namespace, workload_name):
-        return False
-    if image_exposure:
-        return True
-    if not _has_meaningful_evidence(
-        evidence_count,
-        evidence_highest_severity,
-        evidence_scenario_tags,
-        evidence_fact_families,
-    ):
         return False
     return True
 
 
-def build_dashboard_reason(
-    workload_name: str,
-    namespace: str,
-    image_exposure: List[ImageExposure],
-    evidence_count: int = 0,
-    evidence_highest_severity: Optional[str] = None,
-    evidence_scenario_tags: Optional[List[str]] = None,
-    evidence_fact_families: Optional[List[str]] = None,
-) -> tuple[Optional[str], str]:
-    evidence_scenario_tags = evidence_scenario_tags or []
-    evidence_fact_families = evidence_fact_families or []
-
-    if is_unknown_workload(workload_name, namespace):
-        return "excluded_unknown", "excluded: unknown workload or empty namespace"
-    if is_noise_workload(namespace, workload_name):
-        return "excluded_noise", "excluded: deployguard namespace"
-
-    has_exposure = bool(image_exposure)
-    has_meaningful_evidence = _has_meaningful_evidence(
-        evidence_count,
-        evidence_highest_severity,
-        evidence_scenario_tags,
-        evidence_fact_families,
-    )
-
-    if has_exposure and has_meaningful_evidence:
-        return (
-            "hybrid",
-            "image exposure present and runtime evidence met dashboard gate",
-        )
-    if has_exposure:
-        return "exposure", "image exposure present"
-    if has_meaningful_evidence:
-        reason_bits: List[str] = []
-        if evidence_highest_severity in {"high", "critical"}:
-            reason_bits.append(f"severity={evidence_highest_severity}")
-        if evidence_scenario_tags:
-            reason_bits.append("scenario_tags=" + ",".join(evidence_scenario_tags[:3]))
-        elif any(f in _MEANINGFUL_FACT_FAMILIES for f in evidence_fact_families):
-            families = [f for f in evidence_fact_families if f in _MEANINGFUL_FACT_FAMILIES]
-            reason_bits.append("fact_families=" + ",".join(families[:3]))
-        suffix = f" ({'; '.join(reason_bits)})" if reason_bits else ""
-        return "runtime_evidence", f"runtime evidence met dashboard gate{suffix}"
+def compute_risk_level(
+    exposure_critical_cve_count: int,
+    exposure_high_cve_count: int,
+    evidence_count: int,
+    evidence_highest_severity: Optional[str],
+) -> str:
+    if exposure_critical_cve_count > 0 and evidence_count > 0:
+        return "critical"
+    if exposure_critical_cve_count > 0:
+        return "high"
+    if exposure_high_cve_count > 0 and evidence_count > 0:
+        return "high"
+    if exposure_high_cve_count > 0:
+        return "medium"
+    if evidence_highest_severity in {"high", "critical"}:
+        return "high"
     if evidence_count > 0:
-        return (
-            "excluded_low_signal",
-            "excluded: evidence-only workload missing high severity, scenario tags, and meaningful fact family",
-        )
-    return "excluded_empty", "excluded: no image exposure or runtime evidence"
+        return "low"
+    return "info"
+
+
+def build_alert_flags(
+    exposure_critical_cve_count: int,
+    exposure_high_cve_count: int,
+    exposure_has_fix_available: bool,
+    exposure_has_poc: bool,
+    evidence_count: int,
+    evidence_highest_severity: Optional[str],
+) -> List[str]:
+    flags: List[str] = []
+    if exposure_critical_cve_count > 0:
+        flags.append("has_critical_cve")
+    if exposure_high_cve_count > 0:
+        flags.append("has_high_cve")
+    if exposure_has_fix_available:
+        flags.append("has_fix_available")
+    if exposure_has_poc:
+        flags.append("has_poc")
+    if evidence_count > 0:
+        flags.append("has_runtime_activity")
+    if evidence_highest_severity in {"high", "critical"}:
+        flags.append("has_runtime_high_signal")
+    return flags
+
+
+def build_alert_reason(
+    exposure_critical_cve_count: int,
+    exposure_high_cve_count: int,
+    evidence_count: int,
+    evidence_highest_severity: Optional[str],
+) -> str:
+    if exposure_critical_cve_count > 0 and evidence_count > 0:
+        return "Critical vulnerabilities actively used at runtime"
+    if exposure_critical_cve_count > 0:
+        return "Critical vulnerabilities in image"
+    if exposure_high_cve_count > 0 and evidence_count > 0:
+        return "High-risk image actively used"
+    if exposure_high_cve_count > 0:
+        return "High vulnerabilities in image"
+    if evidence_highest_severity in {"high", "critical"}:
+        return "High-severity runtime activity detected"
+    if evidence_count > 0:
+        return "Runtime activity observed"
+    return "No significant risk signals"
 
 
 # ── 정렬 함수 ─────────────────────────────────────────────────────────────
@@ -313,7 +307,7 @@ def sort_workload_summaries(summaries: List[WorkloadSummary]) -> List[WorkloadSu
     "대응 우선순위" 기준 정렬.
 
     우선순위 (내림차순):
-      1. image_exposure 존재 여부
+      1. risk_level
       2. exposure_critical_cve_count
       3. exposure_high_cve_count
       4. exposure_has_fix_available
@@ -324,7 +318,7 @@ def sort_workload_summaries(summaries: List[WorkloadSummary]) -> List[WorkloadSu
     """
     def _key(s: WorkloadSummary):
         return (
-            int(s.exposure_image_count > 0),
+            _RISK_ORDER.get(s.risk_level, 0),
             s.exposure_critical_cve_count,
             s.exposure_high_cve_count,
             int(s.exposure_has_fix_available),
@@ -354,14 +348,25 @@ def build_summary(wid: str, facts: List[FactPayload]) -> WorkloadSummary:
     # aggregate
     exp_agg = aggregate_image_exposure(image_exposure)
     evi_agg = aggregate_runtime_evidence(facts)
-    dashboard_category, dashboard_reason = build_dashboard_reason(
-        workload_name,
-        namespace,
-        image_exposure,
-        evidence_count=evi_agg.count,
-        evidence_highest_severity=evi_agg.highest_severity,
-        evidence_scenario_tags=evi_agg.scenario_tags,
-        evidence_fact_families=evi_agg.fact_families,
+    risk_level = compute_risk_level(
+        exp_agg.critical_cve_count,
+        exp_agg.high_cve_count,
+        evi_agg.count,
+        evi_agg.highest_severity,
+    )
+    alert_flags = build_alert_flags(
+        exp_agg.critical_cve_count,
+        exp_agg.high_cve_count,
+        exp_agg.has_fix_available,
+        exp_agg.has_poc,
+        evi_agg.count,
+        evi_agg.highest_severity,
+    )
+    alert_reason = build_alert_reason(
+        exp_agg.critical_cve_count,
+        exp_agg.high_cve_count,
+        evi_agg.count,
+        evi_agg.highest_severity,
     )
 
     eligible = is_dashboard_eligible(
@@ -406,8 +411,9 @@ def build_summary(wid: str, facts: List[FactPayload]) -> WorkloadSummary:
         evidence_highest_severity=evi_agg.highest_severity,
 
         dashboard_eligible=eligible,
-        dashboard_category=dashboard_category,
-        dashboard_reason=dashboard_reason,
+        risk_level=risk_level,
+        alert_flags=alert_flags,
+        alert_reason=alert_reason,
     )
 
 
@@ -460,14 +466,25 @@ def get_workload_detail(
     # aggregate
     exp_agg = aggregate_image_exposure(image_exposure)
     evi_agg = aggregate_runtime_evidence(facts)
-    dashboard_category, dashboard_reason = build_dashboard_reason(
-        workload_name,
-        namespace,
-        image_exposure,
-        evidence_count=evi_agg.count,
-        evidence_highest_severity=evi_agg.highest_severity,
-        evidence_scenario_tags=evi_agg.scenario_tags,
-        evidence_fact_families=evi_agg.fact_families,
+    risk_level = compute_risk_level(
+        exp_agg.critical_cve_count,
+        exp_agg.high_cve_count,
+        evi_agg.count,
+        evi_agg.highest_severity,
+    )
+    alert_flags = build_alert_flags(
+        exp_agg.critical_cve_count,
+        exp_agg.high_cve_count,
+        exp_agg.has_fix_available,
+        exp_agg.has_poc,
+        evi_agg.count,
+        evi_agg.highest_severity,
+    )
+    alert_reason = build_alert_reason(
+        exp_agg.critical_cve_count,
+        exp_agg.high_cve_count,
+        evi_agg.count,
+        evi_agg.highest_severity,
     )
     eligible = is_dashboard_eligible(
         workload_name,
@@ -512,8 +529,9 @@ def get_workload_detail(
         evidence_highest_severity=evi_agg.highest_severity,
 
         dashboard_eligible=eligible,
-        dashboard_category=dashboard_category,
-        dashboard_reason=dashboard_reason,
+        risk_level=risk_level,
+        alert_flags=alert_flags,
+        alert_reason=alert_reason,
     )
 
 

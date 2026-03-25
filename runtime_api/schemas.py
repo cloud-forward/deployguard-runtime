@@ -173,12 +173,11 @@ class WorkloadSummary(BaseModel):
     evidence_scenario_tags:    list[str] = Field(default_factory=list)
     evidence_highest_severity: Optional[str] = None
 
-    # 대시보드 노출 자격
     dashboard_eligible: bool = False
-    dashboard_category: Optional[str] = None
-    dashboard_reason:   Optional[str] = None
+    risk_level:         str = "info"
+    alert_flags:        list[str] = Field(default_factory=list)
+    alert_reason:       str = "No significant risk signals"
 
-    # 마지막 업데이트
     last_seen_at:   Optional[datetime]
 
 
@@ -234,5 +233,6 @@ class WorkloadDetail(BaseModel):
     evidence_highest_severity: Optional[str] = None
 
     dashboard_eligible: bool = False
-    dashboard_category: Optional[str] = None
-    dashboard_reason:   Optional[str] = None
+    risk_level:         str = "info"
+    alert_flags:        list[str] = Field(default_factory=list)
+    alert_reason:       str = "No significant risk signals"
