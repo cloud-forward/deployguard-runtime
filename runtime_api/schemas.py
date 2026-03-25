@@ -65,10 +65,6 @@ class FactPayload(BaseModel):
     raw_hash:               Optional[str]  = None
 
 
-# IngestRequest는 List[FactPayload]를 직접 사용 (FastAPI가 자동 처리)
-# Pydantic v2: RootModel 사용 또는 List 타입 직접 선언 → routers/ingest.py 참조
-
-
 class IngestResponse(BaseModel):
     accepted:  int
     duplicate: int
@@ -87,7 +83,6 @@ class RuntimeSignal(BaseModel):
     source:        str
     target:        Optional[str]
     scenario_tags: list[str]
-    # 집계 전 개별 signal에서 필요한 최소 컨텍스트만
     action:        str
     success:       Optional[bool]
 
@@ -104,32 +99,82 @@ class ImageExposure(BaseModel):
     fix_available:      bool = False
     poc_exists:         bool = False
     sbom_available:     bool = False
-    sbom_source:        Optional[str] = None   # "trivy" | None
+    sbom_source:        Optional[str] = None
     last_scanned_at:    Optional[datetime] = None
     sample_cves:        list[str] = Field(default_factory=list)
 
 
+# ── Aggregate 모델 ────────────────────────────────────────────────────
+
+class ExposureAggregate(BaseModel):
+    """
+    image_exposure[] 전체에서 집계한 static exposure 요약.
+    프론트가 카드/KPI/정렬에 직접 사용.
+    """
+    critical_cve_count:   int = 0
+    high_cve_count:       int = 0
+    has_fix_available:    bool = False
+    has_poc:              bool = False
+    image_count:          int = 0
+    latest_scanned_at:    Optional[datetime] = None
+    sources:              list[str] = Field(default_factory=list)
+
+
+class EvidenceAggregate(BaseModel):
+    """
+    runtime_evidence(fact) 전체에서 집계한 동적 신호 요약.
+    프론트가 카드/KPI/정렬에 직접 사용.
+    """
+    count:            int = 0
+    latest_at:        Optional[datetime] = None
+    fact_families:    list[str] = Field(default_factory=list)
+    scenario_tags:    list[str] = Field(default_factory=list)
+    highest_severity: Optional[str] = None   # low|medium|high|critical
+
+
+# ── Workload Summary ──────────────────────────────────────────────────
+
 class WorkloadSummary(BaseModel):
     """
     GET /runtime/workloads 응답 단위.
-    workload 기준 집계된 runtime 상태.
+    workload 기준 집계된 runtime 상태 + aggregate exposure/evidence 포함.
     """
-    workload_id:    str                     # cluster_id:namespace:kind:name
+    workload_id:    str
     cluster_id:     str
     namespace:      str
     workload_kind:  str
     workload_name:  str
 
-    # runtime 신호 집계
+    # runtime 신호 집계 (하위 호환 유지)
     signal_count:           int
     latest_signal_at:       Optional[datetime]
-    highest_severity:       Optional[str]   # low|medium|high|critical
-    active_fact_families:   list[str]       # ["credential_access", "execution"]
+    highest_severity:       Optional[str]
+    active_fact_families:   list[str]
     active_scenario_tags:   list[str]
 
-    # image exposure (SBOM join placeholder)
+    # image exposure (SBOM join)
     image_refs:     list[str]
     image_exposure: list[ImageExposure] = Field(default_factory=list)
+
+    # ── 신규: aggregate 필드 ──────────────────────────────────────────
+    # exposure aggregate — 프론트 카드/KPI/정렬용
+    exposure_critical_cve_count: int = 0
+    exposure_high_cve_count:     int = 0
+    exposure_has_fix_available:  bool = False
+    exposure_has_poc:            bool = False
+    exposure_image_count:        int = 0
+    exposure_latest_scanned_at:  Optional[datetime] = None
+    exposure_sources:            list[str] = Field(default_factory=list)
+
+    # evidence aggregate — 프론트 카드/KPI/정렬용
+    evidence_count:            int = 0
+    evidence_latest_at:        Optional[datetime] = None
+    evidence_fact_families:    list[str] = Field(default_factory=list)
+    evidence_scenario_tags:    list[str] = Field(default_factory=list)
+    evidence_highest_severity: Optional[str] = None
+
+    # 대시보드 노출 자격
+    dashboard_eligible: bool = False
 
     # 마지막 업데이트
     last_seen_at:   Optional[datetime]
@@ -145,6 +190,7 @@ class WorkloadListResponse(BaseModel):
 class WorkloadDetail(BaseModel):
     """
     GET /runtime/workloads/{workload_id} 응답.
+    list는 압축, detail은 근거까지 충분히.
     """
     workload_id:   str
     cluster_id:    str
@@ -152,7 +198,7 @@ class WorkloadDetail(BaseModel):
     workload_kind: str
     workload_name: str
 
-    # 런타임 신호 목록 (최근 N개, raw EvidenceFact 비노출)
+    # 런타임 신호 목록 (최근 N개)
     runtime_evidence: list[RuntimeSignal]
 
     # 이미지 노출 (SBOM join)
@@ -169,3 +215,20 @@ class WorkloadDetail(BaseModel):
 
     last_seen_at:     Optional[datetime]
     first_seen_at:    Optional[datetime]
+
+    # ── 신규: aggregate 필드 (list와 동일 구조) ───────────────────────
+    exposure_critical_cve_count: int = 0
+    exposure_high_cve_count:     int = 0
+    exposure_has_fix_available:  bool = False
+    exposure_has_poc:            bool = False
+    exposure_image_count:        int = 0
+    exposure_latest_scanned_at:  Optional[datetime] = None
+    exposure_sources:            list[str] = Field(default_factory=list)
+
+    evidence_count:            int = 0
+    evidence_latest_at:        Optional[datetime] = None
+    evidence_fact_families:    list[str] = Field(default_factory=list)
+    evidence_scenario_tags:    list[str] = Field(default_factory=list)
+    evidence_highest_severity: Optional[str] = None
+
+    dashboard_eligible: bool = False
