@@ -93,8 +93,13 @@ auditScanner:
       cpu: 200m
       memory: 256Mi
 
-  nodeSelector: {}
-  tolerations: []
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: ""
+
+  tolerations:
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
 
 # ============================================================
 # Audit Policy ConfigMap (self-managed에 적용)
