@@ -1,0 +1,74 @@
+{{- if .Values.tetragonScanner.enabled -}}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "deployguard-runtime-scanner.fullname" . }}-tetragon
+  namespace: {{ include "deployguard-runtime-scanner.namespace" . }}
+  labels:
+    {{- include "deployguard-runtime-scanner.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tetragon-scanner
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: deployguard-runtime-scanner
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: tetragon-scanner
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: deployguard-runtime-scanner
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: tetragon-scanner
+        # suppression_policy에서 자기 자신 억제용
+        deployguard.io/internal-collector: "true"
+    spec:
+      serviceAccountName: {{ include "deployguard-runtime-scanner.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: tetragon-scanner
+          image: {{ include "deployguard-runtime-scanner.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            # NODE_NAME: 노드 로컬 Tetragon Pod 찾는 데 필수
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          envFrom:
+            - configMapRef:
+                name: {{ include "deployguard-runtime-scanner.fullname" . }}-tetragon-config
+          resources:
+            {{- toYaml .Values.tetragonScanner.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.tetragonScanner.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tetragonScanner.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

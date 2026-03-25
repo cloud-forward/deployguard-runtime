@@ -1,0 +1,41 @@
+{{- if .Values.auditPolicy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "deployguard-runtime-scanner.fullname" . }}-audit-policy
+  namespace: {{ include "deployguard-runtime-scanner.namespace" . }}
+  labels:
+    {{- include "deployguard-runtime-scanner.labels" . | nindent 4 }}
+data:
+  audit-policy.yaml: |
+    apiVersion: audit.k8s.io/v1
+    kind: Policy
+    rules:
+      # Secret 접근 감지
+      - level: Request
+        resources:
+        - group: ""
+          resources: ["secrets"]
+        verbs: ["get", "list"]
+
+      # CronJob/DaemonSet/RoleBinding 생성 감지
+      - level: Request
+        resources:
+        - group: "batch"
+          resources: ["cronjobs"]
+        - group: "apps"
+          resources: ["daemonsets"]
+        - group: "rbac.authorization.k8s.io"
+          resources: ["rolebindings", "clusterrolebindings"]
+        verbs: ["create"]
+
+      # Pod exec 감지
+      - level: Request
+        resources:
+        - group: ""
+          resources: ["pods/exec"]
+        verbs: ["create"]
+
+      # 나머지 무시
+      - level: None
+{{- end }}

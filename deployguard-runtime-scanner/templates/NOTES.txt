@@ -1,0 +1,33 @@
+=======================================================
+  DeployGuard Runtime Scanner 설치 완료!
+=======================================================
+
+Cluster ID: {{ .Values.clusterId }}
+Forward URL: {{ .Values.forwardUrl }}
+
+-------------------------------------------------------
+설치된 컴포넌트:
+-------------------------------------------------------
+{{- if .Values.tetragonScanner.enabled }}
+✅ Tetragon Scanner (DaemonSet)
+   - 모든 노드에서 실행
+   - Tetragon 런타임 이벤트 수집
+   확인: kubectl get daemonset {{ include "deployguard-runtime-scanner.fullname" . }}-tetragon -n {{ include "deployguard-runtime-scanner.namespace" . }}
+{{- end }}
+
+{{- if .Values.auditScanner.enabled }}
+✅ Audit Scanner (Deployment)
+   replicas: {{ .Values.auditScanner.replicas }}
+   - K8s Audit 로그 수집
+   확인: kubectl get deployment {{ include "deployguard-runtime-scanner.fullname" . }}-audit -n {{ include "deployguard-runtime-scanner.namespace" . }}
+{{- end }}
+
+-------------------------------------------------------
+상태 확인:
+-------------------------------------------------------
+kubectl get pods -n {{ include "deployguard-runtime-scanner.namespace" . }} -l app.kubernetes.io/name=deployguard-runtime-scanner
+
+# 로그 확인
+kubectl logs -n {{ include "deployguard-runtime-scanner.namespace" . }} -l app.kubernetes.io/component=tetragon-scanner --tail=50
+kubectl logs -n {{ include "deployguard-runtime-scanner.namespace" . }} -l app.kubernetes.io/component=audit-scanner --tail=50
+=======================================================

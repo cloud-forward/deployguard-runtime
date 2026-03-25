@@ -1,0 +1,15 @@
+apiVersion: v2
+name: deployguard-runtime-scanner
+description: DeployGuard Runtime Scanner (Tetragon DaemonSet + Audit Deployment)
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+maintainers:
+  - name: DeployGuard
+    email: support@deployguard.io
+
+dependencies:
+  - name: tetragon
+    version: "1.3.0"
+    repository: "https://helm.cilium.io"
+    condition: tetragon.enabled

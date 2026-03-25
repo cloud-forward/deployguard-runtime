@@ -1,0 +1,116 @@
+# ============================================================
+# DeployGuard Runtime Scanner
+# ============================================================
+#
+# 설치 예시:
+# helm dependency update ./deployguard-runtime-scanner
+# helm upgrade --install deployguard-runtime-scanner ./deployguard-runtime-scanner \
+#   --set clusterId=<your-cluster-id> \
+#   --set forwardUrl=http://deployguard-runtime-api:8080/runtime/facts
+# ============================================================
+
+image:
+  repository: 189060532132.dkr.ecr.ap-northeast-2.amazonaws.com/deployguard-runtime-scanner
+  tag: "scanner-main-20260325-1457"
+  pullPolicy: Always
+
+imagePullSecrets: []
+
+namespace: deployguard
+
+# 필수 설정
+clusterId: ""       # --set clusterId=<your-cluster-id>
+forwardUrl: ""      # --set forwardUrl=http://deployguard-runtime-api:8080/runtime/facts
+
+# ============================================================
+# Tetragon (dependency) - eBPF 런타임 수집
+# ============================================================
+tetragon:
+  enabled: true
+  # Tetragon TracingPolicy는 별도 yaml로 적용
+  # kubectl apply -f tracing-policy.yaml
+
+# ============================================================
+# Tetragon Scanner (DaemonSet) - 노드마다 1개
+# ============================================================
+tetragonScanner:
+  enabled: true
+
+  env:
+    TETRAGON_ENABLED: "true"
+    TETRAGON_NAMESPACE: "kube-system"
+    TETRAGON_SELECTOR: "app.kubernetes.io/name=tetragon"
+    TETRAGON_CONTAINER: "export-stdout"
+    AUDIT_ENABLED: "false"
+    SCAN_INTERVAL: "300"
+    FORWARD_MODE: "http-post"
+    FORWARD_HTTP_TIMEOUT: "10"
+    FORWARD_HTTP_BATCH_SIZE: "100"
+    DEBUG: "false"
+    SAVE_RAW: "false"
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  tolerations:
+    - operator: Exists   # 모든 노드에서 실행
+
+  nodeSelector: {}
+
+# ============================================================
+# Audit Scanner (Deployment) - 1개 (self-managed only)
+# ============================================================
+auditScanner:
+  enabled: true
+
+  replicas: 1
+
+  env:
+    TETRAGON_ENABLED: "false"
+    AUDIT_ENABLED: "true"
+    AUDIT_LOG_PATH: "/var/log/kubernetes/audit/audit.log"
+    AUDIT_TAIL_LINES: "1000"
+    SCAN_INTERVAL: "300"
+    FORWARD_MODE: "http-post"
+    FORWARD_HTTP_TIMEOUT: "10"
+    FORWARD_HTTP_BATCH_SIZE: "100"
+    DEBUG: "false"
+    SAVE_RAW: "false"
+
+  # audit log 호스트 경로
+  auditLogHostPath: "/var/log/kubernetes/audit"
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  nodeSelector: {}
+  tolerations: []
+
+# ============================================================
+# Audit Policy ConfigMap (self-managed에 적용)
+# ============================================================
+auditPolicy:
+  enabled: true
+
+# ============================================================
+# 공통
+# ============================================================
+serviceAccount:
+  create: true
+  name: deployguard-runtime-scanner
+  annotations: {}
+
+rbac:
+  create: true
+
+scannerVersion: "1.0.0"
