@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+import fnmatch
 import os
 from typing import List, Optional
 
@@ -41,7 +42,7 @@ _RISK_ORDER = {"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1}
 _DETAIL_SIGNAL_LIMIT = int(os.environ.get("DETAIL_SIGNAL_LIMIT", "50"))
 _RELATED_LIMIT = int(os.environ.get("RELATED_SIGNAL_LIMIT", "20"))
 
-_NOISE_NAMESPACES: set[str] = {"deployguard"}
+_NOISE_WORKLOAD_PATTERNS: tuple[str, ...] = ("deployguard-runtime-scanner-*",)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────
@@ -185,9 +186,9 @@ def is_noise_workload(namespace: str, workload_name: str) -> bool:
     scanner self-noise는 ingest/suppression에서 처리하고,
     dashboard list는 deployguard noise만 추가 제외한다.
     """
-    if namespace in _NOISE_NAMESPACES:
-        return True
-    return False
+    if not workload_name:
+        return False
+    return any(fnmatch.fnmatch(workload_name, pattern) for pattern in _NOISE_WORKLOAD_PATTERNS)
 
 
 def _has_meaningful_evidence(

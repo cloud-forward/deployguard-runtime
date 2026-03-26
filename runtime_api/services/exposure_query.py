@@ -13,6 +13,15 @@ from runtime_api.clients.s3_exposure_client import get_latest_summary
 log = logging.getLogger(__name__)
 
 
+def _repo_name(value: str) -> str:
+    if not value:
+        return ""
+    repo = value.split("@", 1)[0]
+    if ":" in repo.rsplit("/", 1)[-1]:
+        repo = repo.rsplit(":", 1)[0]
+    return repo
+
+
 class ImageExposureSummary:
     """경량 DTO. Pydantic 의존 없음."""
     __slots__ = (
@@ -39,9 +48,10 @@ class ImageExposureSummary:
 
 def _build_indexes(
     images: List[Dict[str, Any]],
-) -> tuple[Dict[str, Dict], Dict[str, Dict]]:
+) -> tuple[Dict[str, Dict], Dict[str, Dict], Dict[str, List[Dict[str, Any]]]]:
     by_digest: Dict[str, Dict] = {}
     by_ref:    Dict[str, Dict] = {}
+    by_repo:   Dict[str, List[Dict[str, Any]]] = {}
     for img in images:
         digest = img.get("image_digest", "")
         ref    = img.get("image_ref", "")
@@ -49,7 +59,10 @@ def _build_indexes(
             by_digest[digest] = img
         if ref:
             by_ref[ref] = img
-    return by_digest, by_ref
+            repo = _repo_name(ref)
+            if repo:
+                by_repo.setdefault(repo, []).append(img)
+    return by_digest, by_ref, by_repo
 
 
 def lookup_exposure(
@@ -71,7 +84,7 @@ def lookup_exposure(
         log.debug("no summary for cluster_id=%s", cluster_id)
         return []
 
-    by_digest, by_ref = _build_indexes(summary.get("images", []))
+    by_digest, by_ref, by_repo = _build_indexes(summary.get("images", []))
     digests = set(image_digests or [])
     refs    = set(image_refs or [])
 
@@ -90,6 +103,29 @@ def lookup_exposure(
         if ref in matched_refs:
             continue
         if ref in by_ref:
-            result.append(ImageExposureSummary(by_ref[ref]))
+            row = by_ref[ref]
+            result.append(ImageExposureSummary(row))
+            matched_refs.add(row.get("image_ref", ""))
+            continue
+
+        repo = _repo_name(ref)
+        if not repo:
+            continue
+
+        candidates = by_repo.get(repo, [])
+        if not candidates:
+            candidates = [
+                img
+                for indexed_repo, rows in by_repo.items()
+                if repo.startswith(indexed_repo) or indexed_repo.startswith(repo)
+                for img in rows
+            ]
+        for row in candidates:
+            row_ref = row.get("image_ref", "")
+            if row_ref in matched_refs:
+                continue
+            result.append(ImageExposureSummary(row))
+            matched_refs.add(row_ref)
+            break
 
     return result

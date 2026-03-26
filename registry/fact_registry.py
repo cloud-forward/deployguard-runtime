@@ -152,6 +152,33 @@ _BUILTIN_REGISTRY: dict[str, dict[str, Any]] = {
         ],
         "description": "호스트 민감 경로 접근 (/proc/1, /etc/shadow 등)",
     },
+    "file_access": {
+        "family":               "discovery",
+        "severity_hint":        "low",
+        "confidence_hint":      0.30,
+        "default_scenario_tags": [
+            "discovery",
+        ],
+        "description": "일반 파일 접근 (분류 미완료)",
+    },
+    "network_connect": {
+        "family":               "discovery",
+        "severity_hint":        "low",
+        "confidence_hint":      0.30,
+        "default_scenario_tags": [
+            "discovery",
+        ],
+        "description": "일반 네트워크 연결 (분류 미완료)",
+    },
+    "k8s_api_call": {
+        "family":               "discovery",
+        "severity_hint":        "low",
+        "confidence_hint":      0.40,
+        "default_scenario_tags": [
+            "discovery",
+        ],
+        "description": "분류되지 않은 K8s API 호출",
+    },
 
     # ── Cloud Access ──────────────────────────────────────────────────
     "aws_api_access": {

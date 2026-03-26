@@ -21,7 +21,7 @@ if "botocore.exceptions" not in sys.modules:
     sys.modules["botocore.exceptions"] = exceptions
 
 from runtime_api.schemas import FactPayload
-from runtime_api.services.exposure_query import ImageExposureSummary
+from runtime_api.services.exposure_query import ImageExposureSummary, lookup_exposure
 from runtime_api.services.workload_detail import (
     aggregate_runtime_evidence,
     build_alert_flags,
@@ -31,7 +31,8 @@ from runtime_api.services.workload_detail import (
     is_dashboard_eligible,
     list_workloads,
 )
-from runtime_api.store import FactStore
+from runtime_api.store import FactStore, _make_workload_id
+from registry.fact_registry import get_family, get_severity_hint
 
 
 def _fact(
@@ -105,8 +106,12 @@ def test_unknown_workload_is_excluded() -> None:
     assert is_dashboard_eligible("unknown", "prod", []) is False
 
 
-def test_deployguard_namespace_is_excluded() -> None:
-    assert is_dashboard_eligible("scanner", "deployguard", []) is False
+def test_deployguard_runtime_scanner_is_excluded() -> None:
+    assert is_dashboard_eligible("deployguard-runtime-scanner-tetragon", "deployguard", []) is False
+
+
+def test_deployguard_non_scanner_workload_is_included() -> None:
+    assert is_dashboard_eligible("deployguard-scanner-image", "deployguard", []) is True
 
 
 def test_non_noise_workload_without_exposure_or_evidence_is_included() -> None:
@@ -287,3 +292,86 @@ def test_detail_includes_risk_and_alert_fields(monkeypatch) -> None:
     assert detail.exposure_has_fix_available is True
     assert detail.exposure_image_count == 1
     assert detail.exposure_sources == ["grype"]
+
+
+def test_unknown_workloads_get_unique_ids_and_stay_ineligible() -> None:
+    now = datetime.now(timezone.utc)
+    fact_a = FactPayload(
+        schema_version="1",
+        fact_version="1",
+        scanner_version="1",
+        cluster_id="c1",
+        observed_at=now,
+        collected_at=now,
+        scanner_event_id="aaaaaaaa-1111",
+        source="test",
+        dedup_key="unknown-a",
+        fact_family="execution",
+        fact_type="test.fact",
+        category="runtime",
+        action="observe",
+        actor={"namespace": "", "workload_kind": "Pod"},
+    )
+    fact_b = FactPayload(
+        schema_version="1",
+        fact_version="1",
+        scanner_version="1",
+        cluster_id="c1",
+        observed_at=now,
+        collected_at=now,
+        scanner_event_id="bbbbbbbb-2222",
+        source="test",
+        dedup_key="unknown-b",
+        fact_family="execution",
+        fact_type="test.fact",
+        category="runtime",
+        action="observe",
+        actor={"namespace": "", "workload_kind": "Pod"},
+    )
+
+    wid_a = _make_workload_id(fact_a)
+    wid_b = _make_workload_id(fact_b)
+
+    assert wid_a != wid_b
+    assert wid_a.endswith(":unknown-aaaaaaaa")
+    assert wid_b.endswith(":unknown-bbbbbbbb")
+    assert is_dashboard_eligible("unknown-aaaaaaaa", "", []) is False
+
+
+def test_fact_registry_has_generic_fallback_fact_types() -> None:
+    assert get_family("file_access") == "discovery"
+    assert get_family("network_connect") == "discovery"
+    assert get_family("k8s_api_call") == "discovery"
+    assert get_severity_hint("file_access") == "low"
+    assert get_severity_hint("network_connect") == "low"
+    assert get_severity_hint("k8s_api_call") == "low"
+
+
+def test_lookup_exposure_matches_repo_when_runtime_ref_uses_digest(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "runtime_api.services.exposure_query.get_latest_summary",
+        lambda cluster_id: {
+            "images": [
+                {
+                    "image_ref": "189060532132.dkr.ecr.ap-northeast-2.amazonaws.com/deployguard-agent-scanner:latest",
+                    "image_digest": "sha256:summary",
+                    "critical_cve_count": 1,
+                    "high_cve_count": 2,
+                    "fix_available": True,
+                    "poc_exists": False,
+                    "sample_cves": ["CVE-1"],
+                    "source": "trivy",
+                    "scanned_at": datetime.now(timezone.utc),
+                }
+            ]
+        },
+    )
+
+    matched = lookup_exposure(
+        "c1",
+        ["189060532132.dkr.ecr.ap-northeast-2.amazonaws.com/deployguard-agent-scanner@sha256:722cff"],
+        [],
+    )
+
+    assert len(matched) == 1
+    assert matched[0].image_ref.endswith("deployguard-agent-scanner:latest")

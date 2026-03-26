@@ -30,6 +30,16 @@ _MAX_FACTS_PER_WORKLOAD = int(os.environ.get("STORE_MAX_FACTS_PER_WORKLOAD", "50
 _FACT_TTL_HOURS         = int(os.environ.get("STORE_FACT_TTL_HOURS", "24"))
 
 
+def _unknown_workload_name(fact: FactPayload) -> str:
+    source_id = (
+        fact.scanner_event_id
+        or fact.source_native_event_id
+        or fact.dedup_key
+        or "unknown"
+    )
+    return f"unknown-{source_id[:8]}"
+
+
 def _make_workload_id(fact: FactPayload) -> str:
     """
     workload_id = cluster_id:namespace:workload_kind:workload_name
@@ -38,7 +48,7 @@ def _make_workload_id(fact: FactPayload) -> str:
     actor = fact.actor
     ns    = actor.get("namespace") or ""
     kind  = actor.get("workload_kind") or "Pod"
-    name  = actor.get("workload_name") or actor.get("pod_name") or "unknown"
+    name  = actor.get("workload_name") or actor.get("pod_name") or _unknown_workload_name(fact)
     return f"{fact.cluster_id}:{ns}:{kind}:{name}"
 
 
