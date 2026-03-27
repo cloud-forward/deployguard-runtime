@@ -9,7 +9,8 @@ metadata:
 data:
   CLUSTER_ID: {{ required "clusterId is required" .Values.clusterId | quote }}
   SCANNER_VERSION: {{ .Values.scannerVersion | quote }}
-  FORWARD_URL: {{ required "forwardUrl is required" .Values.forwardUrl | quote }}
+  FORWARD_URL: {{ .Values.forwardUrl | quote }}
+  ENGINE_BASE_URL: {{ .Values.engineBaseUrl | quote }}
   TETRAGON_ENABLED: {{ .Values.tetragonScanner.env.TETRAGON_ENABLED | quote }}
   TETRAGON_NAMESPACE: {{ .Values.tetragonScanner.env.TETRAGON_NAMESPACE | quote }}
   TETRAGON_SELECTOR: {{ .Values.tetragonScanner.env.TETRAGON_SELECTOR | quote }}
@@ -34,7 +35,8 @@ metadata:
 data:
   CLUSTER_ID: {{ required "clusterId is required" .Values.clusterId | quote }}
   SCANNER_VERSION: {{ .Values.scannerVersion | quote }}
-  FORWARD_URL: {{ required "forwardUrl is required" .Values.forwardUrl | quote }}
+  FORWARD_URL: {{ .Values.forwardUrl | quote }}
+  ENGINE_BASE_URL: {{ .Values.engineBaseUrl | quote }}
   TETRAGON_ENABLED: {{ .Values.auditScanner.env.TETRAGON_ENABLED | quote }}
   AUDIT_ENABLED: {{ .Values.auditScanner.env.AUDIT_ENABLED | quote }}
   AUDIT_LOG_PATH: {{ .Values.auditScanner.env.AUDIT_LOG_PATH | quote }}

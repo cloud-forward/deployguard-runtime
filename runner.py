@@ -32,6 +32,7 @@ from fact_builder.enricher     import (
     get_workload_labels, get_workload_annotations,
 )
 from forwarder.dispatcher      import dispatch
+from forwarder.live_sink       import send_snapshot, serialize
 from config.loader             import get_system_namespaces
 from suppression.matcher       import get_matcher, reload_matcher
 from suppression.self_identity import get_identity
@@ -69,6 +70,7 @@ AUDIT_ENABLED    = os.environ.get("AUDIT_ENABLED", "true").lower() == "true"
 AUDIT_LOG_PATH   = os.environ.get("AUDIT_LOG_PATH",
                                    "/var/log/kubernetes/audit/audit.log")
 AUDIT_TAIL_LINES = int(os.environ.get("AUDIT_TAIL_LINES", "1000"))
+FORWARD_MODE = os.environ.get("FORWARD_MODE", "http-post").lower()
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -221,6 +223,31 @@ def _apply_suppression(fact, pod_meta_map: dict) -> bool:
     return False
 
 
+def _snapshot_utc_string(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _resolve_snapshot_times(facts: list) -> tuple[datetime, datetime | None]:
+    if facts:
+        snapshot_at = max(f.collected_at for f in facts)
+        last_seen_at = max(f.observed_at for f in facts)
+        return snapshot_at, last_seen_at
+    return datetime.now(timezone.utc), None
+
+
+def _build_snapshot_envelope(facts: list) -> dict:
+    snapshot_at, last_seen_at = _resolve_snapshot_times(facts)
+    return {
+        "schema_version": "1.0",
+        "scanner_version": SCANNER_VERSION,
+        "cluster_id": CLUSTER_ID,
+        "snapshot_at": _snapshot_utc_string(snapshot_at),
+        "last_seen_at": _snapshot_utc_string(last_seen_at) if last_seen_at else None,
+        "fact_count": len(facts),
+        "facts": [serialize(f) for f in facts],
+    }
+
+
 # ── 메인 실행 ─────────────────────────────────────────────────────────
 
 def run() -> None:
@@ -335,6 +362,11 @@ def run() -> None:
                 "[suppression-metric] rule=%s count=%d last=%s",
                 metric["rule_id"], metric["match_count"], metric["last_matched"],
             )
+
+    if FORWARD_MODE == "engine-s3":
+        envelope = _build_snapshot_envelope(facts)
+        send_snapshot(envelope, allow_local_fallback=bool(facts))
+        return
 
     dispatch(facts)
 

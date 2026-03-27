@@ -22,7 +22,7 @@ import os
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Mapping, Sequence
 
 from schemas.evidence_fact import EvidenceFact
 
@@ -31,6 +31,8 @@ log = logging.getLogger(__name__)
 # http-post가 기본값 (runtime_api 중심 구조)
 FORWARD_MODE = os.environ.get("FORWARD_MODE", "http-post").lower()
 FORWARD_URL  = os.environ.get("FORWARD_URL", "")   # e.g. http://runtime-api:8080/runtime/facts
+ENGINE_BASE_URL = os.environ.get("ENGINE_BASE_URL", "")
+ENGINE_API_TOKEN = os.environ.get("ENGINE_API_TOKEN", "")
 OUTPUT_DIR   = Path(os.environ.get("OUTPUT_DIR", "/tmp/evidence"))
 
 # HTTP 전송 설정
@@ -71,6 +73,15 @@ def send(facts: Sequence[EvidenceFact]) -> None:
         _send_http(facts)
 
 
+def send_snapshot(
+    envelope: Mapping[str, Any],
+    *,
+    allow_local_fallback: bool,
+) -> None:
+    """engine-s3 모드용 snapshot envelope 전송."""
+    _send_engine_s3(envelope, allow_local_fallback=allow_local_fallback)
+
+
 # ── 내부 전송 구현 ────────────────────────────────────────────────────
 
 def _send_stdout(facts: Sequence[EvidenceFact]) -> None:
@@ -92,6 +103,123 @@ def _send_file(facts: Sequence[EvidenceFact]) -> None:
     except Exception as e:
         log.error("live_sink 파일 저장 실패: %s — stdout fallback", e)
         _send_stdout(facts)
+
+
+def _write_snapshot_file(envelope: Mapping[str, Any]) -> None:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    snapshot_at = envelope.get("snapshot_at")
+    if isinstance(snapshot_at, str):
+        ts = snapshot_at.replace("-", "").replace(":", "").replace("+00:00", "Z")
+    else:
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    out_path = OUTPUT_DIR / f"snapshot_{ts}.json"
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(dict(envelope), f, indent=2, ensure_ascii=False, default=str)
+    log.info("engine-s3 snapshot 저장: %s (%d건)", out_path, envelope.get("fact_count", 0))
+
+
+def _engine_headers(*, include_json: bool) -> dict[str, str]:
+    headers = {
+        "Authorization": f"Bearer {ENGINE_API_TOKEN}",
+        "X-Scanner-Source": "deployguard-runtime-scanner",
+    }
+    if include_json:
+        headers["Content-Type"] = "application/json"
+    return headers
+
+
+def _engine_endpoint(path: str) -> str:
+    return f"{ENGINE_BASE_URL.rstrip('/')}{path}"
+
+
+def _request_engine_upload_url() -> dict[str, Any]:
+    req = urllib.request.Request(
+        _engine_endpoint("/api/v1/runtime/upload-url"),
+        data=b"",
+        method="POST",
+        headers=_engine_headers(include_json=False),
+    )
+    with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _put_snapshot_to_presigned_url(upload_url: str, envelope: Mapping[str, Any]) -> None:
+    payload = json.dumps(dict(envelope), ensure_ascii=False, default=str).encode("utf-8")
+    req = urllib.request.Request(
+        upload_url,
+        data=payload,
+        method="PUT",
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT):
+        return
+
+
+def _complete_engine_snapshot(s3_key: str, snapshot_at: str, fact_count: int) -> None:
+    payload = json.dumps(
+        {
+            "s3_key": s3_key,
+            "snapshot_at": snapshot_at,
+            "fact_count": fact_count,
+        },
+        ensure_ascii=False,
+        default=str,
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        _engine_endpoint("/api/v1/runtime/complete"),
+        data=payload,
+        method="POST",
+        headers=_engine_headers(include_json=True),
+    )
+    with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT):
+        return
+
+
+def _send_engine_s3(
+    envelope: Mapping[str, Any],
+    *,
+    allow_local_fallback: bool,
+) -> None:
+    fact_count = int(envelope.get("fact_count", 0) or 0)
+    missing = [
+        name for name, value in [
+            ("CLUSTER_ID", envelope.get("cluster_id")),
+            ("ENGINE_BASE_URL", ENGINE_BASE_URL),
+            ("ENGINE_API_TOKEN", ENGINE_API_TOKEN),
+        ]
+        if not value
+    ]
+    if missing:
+        log.error("engine-s3 전송 설정 누락: %s", ", ".join(missing))
+        if allow_local_fallback:
+            _write_snapshot_file(envelope)
+        return
+
+    try:
+        upload_meta = _request_engine_upload_url()
+        upload_url = upload_meta["upload_url"]
+        s3_key = upload_meta["s3_key"]
+    except Exception as e:
+        log.error("engine-s3 upload-url 요청 실패: %s", e)
+        if allow_local_fallback:
+            _write_snapshot_file(envelope)
+        return
+
+    try:
+        _put_snapshot_to_presigned_url(upload_url, envelope)
+        log.info("engine-s3 snapshot PUT 성공: s3_key=%s fact_count=%d", s3_key, fact_count)
+    except Exception as e:
+        log.error("engine-s3 snapshot PUT 실패: %s", e)
+        if allow_local_fallback:
+            _write_snapshot_file(envelope)
+        return
+
+    try:
+        snapshot_at = str(envelope["snapshot_at"])
+        _complete_engine_snapshot(s3_key, snapshot_at, fact_count)
+        log.info("engine-s3 snapshot complete 성공: s3_key=%s fact_count=%d", s3_key, fact_count)
+    except Exception as e:
+        log.error("engine-s3 snapshot complete 실패: %s", e)
 
 
 def _send_http(facts: Sequence[EvidenceFact]) -> None:

@@ -45,6 +45,14 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            {{- if .Values.engineApiTokenSecret.name }}
+            - name: ENGINE_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.engineApiTokenSecret.name | quote }}
+                  key: {{ .Values.engineApiTokenSecret.key | quote }}
+                  optional: true
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "deployguard-runtime-scanner.fullname" . }}-tetragon-config

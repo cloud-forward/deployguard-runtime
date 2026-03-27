@@ -20,7 +20,11 @@ namespace: deployguard
 
 # 필수 설정
 clusterId: ""       # --set clusterId=<your-cluster-id>
-forwardUrl: ""      # --set forwardUrl=http://deployguard-runtime-api:8080/runtime/facts
+forwardUrl: ""      # http-post 모드에서만 필요
+engineBaseUrl: ""   # --set engineBaseUrl=http://engine-api:8080
+engineApiTokenSecret:
+  name: ""
+  key: "token"
 
 # ============================================================
 # Tetragon (dependency) - eBPF 런타임 수집
