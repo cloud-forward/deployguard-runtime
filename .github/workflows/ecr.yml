@@ -1,71 +1,71 @@
 name: Build and Push Runtime Images
-
 on:
   push:
     branches:
       - main
-
 permissions:
   id-token: write
   contents: read
-
 env:
   AWS_REGION: ap-northeast-2
   AWS_ACCOUNT_ID: "189060532132"
+  TARGET_ACCOUNT_ID: "244105859679"
   ECR_REPOSITORY: deployguard-runtime-scanner
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (189 계정 — Role Assume)
         uses: aws-actions/configure-aws-credentials@v6.0.0
         with:
           role-to-assume: arn:aws:iam::189060532132:role/deployguard-runtime-ecr-push-policy
           aws-region: ap-northeast-2
 
-      - name: Login to Amazon ECR
+      - name: Login to source ECR (189 계정)
         uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Login to target ECR (244 계정)
+        run: |
+          aws ecr get-login-password --region ap-northeast-2 | \
+            docker login --username AWS --password-stdin \
+            244105859679.dkr.ecr.ap-northeast-2.amazonaws.com
 
       - name: Prepare image tags
         id: prep
         run: |
           SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
           BUILD_TIME=$(TZ=Asia/Seoul date +'%Y%m%d-%H%M')
-          IMAGE_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}
-
+          SRC_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}
+          DST_URI=${TARGET_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}
           echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
           echo "build_time=${BUILD_TIME}" >> $GITHUB_OUTPUT
-          echo "image_uri=${IMAGE_URI}" >> $GITHUB_OUTPUT
+          echo "src_uri=${SRC_URI}" >> $GITHUB_OUTPUT
+          echo "dst_uri=${DST_URI}" >> $GITHUB_OUTPUT
 
       - name: Build scanner image
         run: |
           docker build \
-            -t ${{ steps.prep.outputs.image_uri }}:scanner-latest \
-            -t ${{ steps.prep.outputs.image_uri }}:scanner-sha-${{ steps.prep.outputs.short_sha }} \
-            -t ${{ steps.prep.outputs.image_uri }}:scanner-main-${{ steps.prep.outputs.build_time }} \
+            -t ${{ steps.prep.outputs.src_uri }}:scanner-latest \
+            -t ${{ steps.prep.outputs.src_uri }}:scanner-sha-${{ steps.prep.outputs.short_sha }} \
+            -t ${{ steps.prep.outputs.src_uri }}:scanner-main-${{ steps.prep.outputs.build_time }} \
             -f Dockerfile .
 
-      - name: Push scanner image
+      - name: Push to source ECR (189 계정)
         run: |
-          docker push ${{ steps.prep.outputs.image_uri }}:scanner-latest
-          docker push ${{ steps.prep.outputs.image_uri }}:scanner-sha-${{ steps.prep.outputs.short_sha }}
-          docker push ${{ steps.prep.outputs.image_uri }}:scanner-main-${{ steps.prep.outputs.build_time }}
+          docker push ${{ steps.prep.outputs.src_uri }}:scanner-latest
+          docker push ${{ steps.prep.outputs.src_uri }}:scanner-sha-${{ steps.prep.outputs.short_sha }}
+          docker push ${{ steps.prep.outputs.src_uri }}:scanner-main-${{ steps.prep.outputs.build_time }}
 
-      - name: Build runtime api image
+      - name: Tag and Push to target ECR (244 계정)
         run: |
-          docker build \
-            -t ${{ steps.prep.outputs.image_uri }}:api-latest \
-            -t ${{ steps.prep.outputs.image_uri }}:api-sha-${{ steps.prep.outputs.short_sha }} \
-            -t ${{ steps.prep.outputs.image_uri }}:api-main-${{ steps.prep.outputs.build_time }} \
-            -f runtime_api/Dockerfile ./runtime_api
-
-      - name: Push runtime api image
-        run: |
-          docker push ${{ steps.prep.outputs.image_uri }}:api-latest
-          docker push ${{ steps.prep.outputs.image_uri }}:api-sha-${{ steps.prep.outputs.short_sha }}
-          docker push ${{ steps.prep.outputs.image_uri }}:api-main-${{ steps.prep.outputs.build_time }}
+          for TAG in \
+            scanner-latest \
+            scanner-sha-${{ steps.prep.outputs.short_sha }} \
+            scanner-main-${{ steps.prep.outputs.build_time }}; do
+            docker tag ${{ steps.prep.outputs.src_uri }}:${TAG} \
+                       ${{ steps.prep.outputs.dst_uri }}:${TAG}
+            docker push ${{ steps.prep.outputs.dst_uri }}:${TAG}
+          done
