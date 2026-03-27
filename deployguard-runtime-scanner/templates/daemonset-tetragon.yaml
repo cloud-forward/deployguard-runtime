@@ -19,7 +19,6 @@ spec:
         app.kubernetes.io/name: deployguard-runtime-scanner
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: tetragon-scanner
-        # suppression_policy에서 자기 자신 억제용
         deployguard.io/internal-collector: "true"
     spec:
       serviceAccountName: {{ include "deployguard-runtime-scanner.serviceAccountName" . }}
@@ -32,7 +31,6 @@ spec:
           image: {{ include "deployguard-runtime-scanner.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
-            # NODE_NAME: 노드 로컬 Tetragon Pod 찾는 데 필수
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
@@ -45,6 +43,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: ENGINE_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "deployguard-runtime-scanner.fullname" . }}-engine-token
+                  key: ENGINE_API_TOKEN
           envFrom:
             - configMapRef:
                 name: {{ include "deployguard-runtime-scanner.fullname" . }}-tetragon-config

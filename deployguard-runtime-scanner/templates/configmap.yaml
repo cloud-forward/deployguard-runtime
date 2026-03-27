@@ -9,16 +9,14 @@ metadata:
 data:
   CLUSTER_ID: {{ required "clusterId is required" .Values.clusterId | quote }}
   SCANNER_VERSION: {{ .Values.scannerVersion | quote }}
-  FORWARD_URL: {{ required "forwardUrl is required" .Values.forwardUrl | quote }}
+  ENGINE_BASE_URL: {{ required "engineBaseUrl is required" .Values.engineBaseUrl | quote }}
   TETRAGON_ENABLED: {{ .Values.tetragonScanner.env.TETRAGON_ENABLED | quote }}
   TETRAGON_NAMESPACE: {{ .Values.tetragonScanner.env.TETRAGON_NAMESPACE | quote }}
   TETRAGON_SELECTOR: {{ .Values.tetragonScanner.env.TETRAGON_SELECTOR | quote }}
   TETRAGON_CONTAINER: {{ .Values.tetragonScanner.env.TETRAGON_CONTAINER | quote }}
   AUDIT_ENABLED: {{ .Values.tetragonScanner.env.AUDIT_ENABLED | quote }}
   SCAN_INTERVAL: {{ .Values.tetragonScanner.env.SCAN_INTERVAL | quote }}
-  FORWARD_MODE: {{ .Values.tetragonScanner.env.FORWARD_MODE | quote }}
   FORWARD_HTTP_TIMEOUT: {{ .Values.tetragonScanner.env.FORWARD_HTTP_TIMEOUT | quote }}
-  FORWARD_HTTP_BATCH_SIZE: {{ .Values.tetragonScanner.env.FORWARD_HTTP_BATCH_SIZE | quote }}
   DEBUG: {{ .Values.tetragonScanner.env.DEBUG | quote }}
   SAVE_RAW: {{ .Values.tetragonScanner.env.SAVE_RAW | quote }}
 {{- end }}
@@ -34,15 +32,26 @@ metadata:
 data:
   CLUSTER_ID: {{ required "clusterId is required" .Values.clusterId | quote }}
   SCANNER_VERSION: {{ .Values.scannerVersion | quote }}
-  FORWARD_URL: {{ required "forwardUrl is required" .Values.forwardUrl | quote }}
+  ENGINE_BASE_URL: {{ required "engineBaseUrl is required" .Values.engineBaseUrl | quote }}
   TETRAGON_ENABLED: {{ .Values.auditScanner.env.TETRAGON_ENABLED | quote }}
   AUDIT_ENABLED: {{ .Values.auditScanner.env.AUDIT_ENABLED | quote }}
   AUDIT_LOG_PATH: {{ .Values.auditScanner.env.AUDIT_LOG_PATH | quote }}
   AUDIT_TAIL_LINES: {{ .Values.auditScanner.env.AUDIT_TAIL_LINES | quote }}
   SCAN_INTERVAL: {{ .Values.auditScanner.env.SCAN_INTERVAL | quote }}
-  FORWARD_MODE: {{ .Values.auditScanner.env.FORWARD_MODE | quote }}
   FORWARD_HTTP_TIMEOUT: {{ .Values.auditScanner.env.FORWARD_HTTP_TIMEOUT | quote }}
-  FORWARD_HTTP_BATCH_SIZE: {{ .Values.auditScanner.env.FORWARD_HTTP_BATCH_SIZE | quote }}
   DEBUG: {{ .Values.auditScanner.env.DEBUG | quote }}
   SAVE_RAW: {{ .Values.auditScanner.env.SAVE_RAW | quote }}
+{{- end }}
+---
+{{- if .Values.engineApiToken }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "deployguard-runtime-scanner.fullname" . }}-engine-token
+  namespace: {{ include "deployguard-runtime-scanner.namespace" . }}
+  labels:
+    {{- include "deployguard-runtime-scanner.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  ENGINE_API_TOKEN: {{ .Values.engineApiToken | quote }}
 {{- end }}

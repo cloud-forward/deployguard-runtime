@@ -5,11 +5,9 @@ runner.py — DeployGuard Runtime Scanner
   collect → normalize → enrich → build_evidence_fact → suppress → dispatch
 
 변경 사항:
-  - forward() → forwarder.dispatcher.dispatch()
-  - Tetragon: DaemonSet 전제, NODE_NAME 기반 노드 로컬 수집
-  - _find_tetragon_pods(): --field-selector를 -o 앞에 위치, 2개 이상 pod 경고
-  - Audit: 구조 유지, DB 저장은 추후
-
+  - dispatch()를 facts 유무와 관계없이 항상 호출 (empty cycle liveness)
+  - FORWARD_MODE / FORWARD_URL 제거 (Engine S3 전용)
+  - ENGINE_BASE_URL / ENGINE_API_TOKEN 환경변수 사용
 """
 
 import time
@@ -57,12 +55,6 @@ TETRAGON_SELECTOR  = os.environ.get("TETRAGON_SELECTOR",
                                      "app.kubernetes.io/name=tetragon")
 TETRAGON_CONTAINER = os.environ.get("TETRAGON_CONTAINER", "export-stdout")
 
-# DaemonSet: Pod spec에서 fieldRef로 주입
-#   env:
-#   - name: NODE_NAME
-#     valueFrom:
-#       fieldRef:
-#         fieldPath: spec.nodeName
 NODE_NAME = os.environ.get("NODE_NAME", "")
 
 AUDIT_ENABLED    = os.environ.get("AUDIT_ENABLED", "true").lower() == "true"
@@ -94,9 +86,6 @@ def _find_tetragon_pods() -> list[str]:
     DaemonSet 전제:
       NODE_NAME 설정 → fieldSelector로 해당 노드 Pod만 반환
       NODE_NAME 미설정 → 전체 Pod 반환 + 경고 (fallback)
-
-    --field-selector는 반드시 -o 옵션보다 앞에 위치.
-    pod가 2개 이상이면 경고 로그 출력.
     """
     try:
         cmd = [
@@ -225,7 +214,7 @@ def _apply_suppression(fact, pod_meta_map: dict) -> bool:
 
 def run() -> None:
     if not CLUSTER_ID:
-        log.warning("CLUSTER_ID 미설정 — DB 저장 skip, live sink는 정상 동작")
+        log.warning("CLUSTER_ID 미설정")
 
     system_namespaces = get_system_namespaces()
     pod_meta_map, owner_map = get_pod_meta()
@@ -287,7 +276,7 @@ def run() -> None:
         except Exception as e:
             log.error("Tetragon 처리 실패: %s", e)
 
-    # ── Audit (구조 유지) ─────────────────────────────────────────────
+    # ── Audit ─────────────────────────────────────────────────────────
     seen_audit: set = set()
     for raw in audit_raws:
         try:
@@ -336,6 +325,7 @@ def run() -> None:
                 metric["rule_id"], metric["match_count"], metric["last_matched"],
             )
 
+    # empty cycle이어도 항상 dispatch (liveness 확인)
     dispatch(facts)
 
 

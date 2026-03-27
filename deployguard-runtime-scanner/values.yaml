@@ -6,7 +6,8 @@
 # helm dependency update ./deployguard-runtime-scanner
 # helm upgrade --install deployguard-runtime-scanner ./deployguard-runtime-scanner \
 #   --set clusterId=<your-cluster-id> \
-#   --set forwardUrl=http://deployguard-runtime-api:8080/runtime/facts
+#   --set engineBaseUrl=https://api.deployguard.io \
+#   --set engineApiToken=<your-api-token>
 # ============================================================
 
 image:
@@ -19,16 +20,15 @@ imagePullSecrets: []
 namespace: deployguard
 
 # 필수 설정
-clusterId: ""       # --set clusterId=<your-cluster-id>
-forwardUrl: ""      # --set forwardUrl=http://deployguard-runtime-api:8080/runtime/facts
+clusterId: ""           # --set clusterId=<your-cluster-id>
+engineBaseUrl: ""       # --set engineBaseUrl=https://api.deployguard.io
+engineApiToken: ""      # --set engineApiToken=<your-api-token>  (Secret으로 주입)
 
 # ============================================================
 # Tetragon (dependency) - eBPF 런타임 수집
 # ============================================================
 tetragon:
   enabled: true
-  # Tetragon TracingPolicy는 별도 yaml로 적용
-  # kubectl apply -f tracing-policy.yaml
 
 # ============================================================
 # Tetragon Scanner (DaemonSet) - 노드마다 1개
@@ -43,9 +43,7 @@ tetragonScanner:
     TETRAGON_CONTAINER: "export-stdout"
     AUDIT_ENABLED: "false"
     SCAN_INTERVAL: "300"
-    FORWARD_MODE: "http-post"
-    FORWARD_HTTP_TIMEOUT: "10"
-    FORWARD_HTTP_BATCH_SIZE: "100"
+    FORWARD_HTTP_TIMEOUT: "30"
     DEBUG: "false"
     SAVE_RAW: "false"
 
@@ -58,7 +56,7 @@ tetragonScanner:
       memory: 256Mi
 
   tolerations:
-    - operator: Exists   # 모든 노드에서 실행
+    - operator: Exists
 
   nodeSelector: {}
 
@@ -76,13 +74,10 @@ auditScanner:
     AUDIT_LOG_PATH: "/var/log/kubernetes/audit/audit.log"
     AUDIT_TAIL_LINES: "1000"
     SCAN_INTERVAL: "300"
-    FORWARD_MODE: "http-post"
-    FORWARD_HTTP_TIMEOUT: "10"
-    FORWARD_HTTP_BATCH_SIZE: "100"
+    FORWARD_HTTP_TIMEOUT: "30"
     DEBUG: "false"
     SAVE_RAW: "false"
 
-  # audit log 호스트 경로
   auditLogHostPath: "/var/log/kubernetes/audit"
 
   resources:
