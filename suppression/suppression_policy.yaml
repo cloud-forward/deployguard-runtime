@@ -6,8 +6,6 @@ rules:
     match:
       workload_labels:
         deployguard.io/internal-collector: "true"
-      fact_type: "sa_token_access|kube_api_access"
-      binary: "/usr/local/bin/kubectl"
     action:
       drop: true
       log_level: info

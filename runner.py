@@ -235,8 +235,9 @@ def run() -> None:
         except Exception as e:
             log.error("Raw 저장 실패: %s", e)
 
-    facts:      list = []
-    suppressed: int  = 0
+    facts:         list = []
+    suppressed:    int  = 0
+    host_filtered: int  = 0
 
     # ── Tetragon ──────────────────────────────────────────────────────
     seen_tetragon: set = set()
@@ -267,6 +268,14 @@ def run() -> None:
             if not fact:
                 continue
 
+            if fact.actor.namespace is None and fact.actor.pod_name is None:
+                host_filtered += 1
+                log.debug(
+                    "[host-filtered] fact=%s source=%s actor_namespace=None actor_pod_name=None",
+                    fact.fact_type, event.source,
+                )
+                continue
+
             if _apply_suppression(fact, pod_meta_map):
                 suppressed += 1
                 continue
@@ -285,6 +294,8 @@ def run() -> None:
                 continue
 
             event, excerpt = result if isinstance(result, tuple) else (result, None)
+            if event is None:
+                continue
 
             audit_id = raw.get("auditID")
             if audit_id:
@@ -304,6 +315,14 @@ def run() -> None:
             if not fact:
                 continue
 
+            if fact.actor.namespace is None and fact.actor.pod_name is None:
+                host_filtered += 1
+                log.debug(
+                    "[host-filtered] fact=%s source=%s actor_namespace=None actor_pod_name=None",
+                    fact.fact_type, event.source,
+                )
+                continue
+
             if _apply_suppression(fact, pod_meta_map):
                 suppressed += 1
                 continue
@@ -314,8 +333,8 @@ def run() -> None:
             log.error("Audit 처리 실패: %s", e)
 
     log.info(
-        "EvidenceFact: 생성=%d  통과=%d  suppressed=%d",
-        len(facts) + suppressed, len(facts), suppressed,
+        "EvidenceFact: 생성=%d  통과=%d  suppressed=%d  host_filtered=%d",
+        len(facts) + suppressed + host_filtered, len(facts), suppressed, host_filtered,
     )
 
     for metric in get_matcher().metrics_snapshot():

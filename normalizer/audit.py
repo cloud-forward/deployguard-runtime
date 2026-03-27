@@ -166,3 +166,13 @@ def normalize_with_excerpt(raw: dict):
 
     raw_excerpt = _build_audit_raw_excerpt(raw)
     return result, raw_excerpt
+
+
+def normalize_with_excerpt(raw: dict):
+    """
+    normalize() 호출 결과가 None이면 (None, None), 아니면 normalize() 반환값을 그대로 반환.
+    """
+    result = normalize(raw)
+    if result is None:
+        return None, None
+    return result
